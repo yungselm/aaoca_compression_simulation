@@ -1,0 +1,8 @@
+[package]
+name = "aaoca_compression_simulation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+csv = "1.1"
+serde = { version = "1.0", features = ["derive"]}
