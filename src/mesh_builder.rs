@@ -1,4 +1,5 @@
 use crate::data_read::ContourPoint;
+use std::cmp::min;
 use std::error::Error;
 use std::f64::consts::PI;
 use std::fs::File;
@@ -11,6 +12,24 @@ pub fn compute_centroid(contour: &[ContourPoint]) -> (f64, f64) {
         .fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
     let n = contour.len() as f64;
     (sum_x / n, sum_y / n)
+}
+
+/// Sort a contour’s points in counterclockwise order around its centroid,
+/// and then rotate the vector so that the highest y-value is first.
+pub fn sort_contour_points(contour: &mut Vec<ContourPoint>) {
+    let center = compute_centroid(contour);
+    contour.sort_by(|a, b| {
+        let angle_a = (a.y - center.1).atan2(a.x - center.0);
+        let angle_b = (b.y - center.1).atan2(b.x - center.0);
+        angle_a.partial_cmp(&angle_b).unwrap()
+    });
+    let start_idx = contour
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    contour.rotate_left(start_idx);
 }
 
 /// Rotate a point about a given center by an angle (in radians).
@@ -98,7 +117,10 @@ pub fn find_best_rotation(reference: &[ContourPoint], target: &[ContourPoint]) -
 
 /// Writes an OBJ file connecting each adjacent pair of contours (each as a slice of ContourPoint)
 /// by creating two triangles per quad.
-pub fn write_obj_mesh(contours: &[(u32, Vec<ContourPoint>)], filename: &str) -> Result<(), Box<dyn Error>> {
+pub fn write_obj_mesh(
+    contours: &[(u32, Vec<ContourPoint>)],
+    filename: &str,
+) -> Result<(), Box<dyn Error>> {
     // Make a copy and sort by frame_index.
     let mut sorted_contours = contours.to_owned();
     sorted_contours.sort_by_key(|(frame_index, _)| *frame_index);
@@ -159,6 +181,11 @@ pub fn write_obj_mesh(contours: &[(u32, Vec<ContourPoint>)], filename: &str) -> 
 /// The input is a vector of tuples: (contour_id, contour_points).
 /// Returns the aligned contours.
 pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, Vec<ContourPoint>)> {
+    // First, ensure every contour is sorted in the same manner.
+    for (_, contour) in contours.iter_mut() {
+        sort_contour_points(contour);
+    }
+
     // Sort contours by frame_index.
     contours.sort_by_key(|(frame_index, _)| *frame_index);
 
@@ -176,17 +203,23 @@ pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, 
     let dx = p2.x - p1.x;
     let dy = p2.y - p1.y;
     let line_angle = dy.atan2(dx);
+    // We want the line to be vertical (i.e. at PI/2).
     let rotation_to_y = (PI / 2.0) - line_angle;
     println!(
         "Reference line angle: {:.3} rad; rotating reference by {:.3} rad",
         line_angle, rotation_to_y
     );
 
-    // Rotate the reference contour.
+    // Rotate the reference contour about its centroid.
     let ref_centroid = compute_centroid(ref_contour);
     let mut aligned_reference = (*ref_contour).clone();
     rotate_contour(&mut aligned_reference, rotation_to_y, ref_centroid);
+    // Re-sort the reference after rotation to ensure the highest-y point is first.
+    sort_contour_points(&mut aligned_reference);
     contours[reference_pos].1 = aligned_reference.clone();
+
+    // Extract a clone of the reference contour so we can use it immutably.
+    let reference_clone = contours[reference_pos].1.clone();
 
     // Align each non-reference contour.
     for (id, contour) in contours.iter_mut() {
@@ -204,8 +237,8 @@ pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, 
                 z: p.z,
             })
             .collect();
-        // Center the reference.
-        let centered_reference: Vec<ContourPoint> = aligned_reference
+        // Center the reference using our pre-cloned reference.
+        let centered_reference: Vec<ContourPoint> = reference_clone
             .iter()
             .map(|p| ContourPoint {
                 frame_index: p.frame_index,
@@ -218,6 +251,8 @@ pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, 
         let best_rot = find_best_rotation(&centered_reference, &centered);
         println!("Rotating contour {} by {:.3} rad for best correlation", id, best_rot);
         rotate_contour(contour, best_rot, orig_centroid);
+        // Re-sort each contour after rotation.
+        sort_contour_points(contour);
         let new_centroid = compute_centroid(contour);
         let translation = (ref_centroid.0 - new_centroid.0, ref_centroid.1 - new_centroid.1);
         translate_contour(contour, translation);
@@ -226,23 +261,26 @@ pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, 
     contours
 }
 
-/// (Optional) Interpolate between two aligned sets of contours.
-/// For each corresponding point in diastole and systole, a linear interpolation is performed.
-/// Returns a vector of intermediate contour sets.
+/// Interpolate between two aligned sets of contours.
+/// For each corresponding point in start and end, a linear interpolation is performed.
+/// If the number of contours differs, the longer set is trimmed to the shorter one.
 pub fn interpolate_contours(
     contours_start: &[(u32, Vec<ContourPoint>)],
     contours_end: &[(u32, Vec<ContourPoint>)],
     steps: usize,
 ) -> Result<Vec<Vec<(u32, Vec<ContourPoint>)>>, Box<dyn Error>> {
-    if contours_start.len() != contours_end.len() {
-        return Err("Mismatch in number of contours between start and end.".into());
-    }
+    use std::cmp::min;
+
+    // Trim the sets to the same number.
+    let n = min(contours_start.len(), contours_end.len());
+    let start = &contours_start[0..n];
+    let end = &contours_end[0..n];
 
     let mut interpolated = Vec::with_capacity(steps);
     for step in 0..steps {
         let t = step as f64 / (steps - 1) as f64;
-        let mut intermediate = Vec::with_capacity(contours_start.len());
-        for ((id_start, contour_start), (id_end, contour_end)) in contours_start.iter().zip(contours_end.iter()) {
+        let mut intermediate = Vec::with_capacity(n);
+        for ((id_start, contour_start), (id_end, contour_end)) in start.iter().zip(end.iter()) {
             if id_start != id_end {
                 return Err("Contour IDs do not match between start and end.".into());
             }
