@@ -19,8 +19,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut diastole_contours: Vec<(u32, Vec<_>)> = diastole_groups.into_iter().collect();
     // Align diastole contours.
     diastole_contours = align_contours(diastole_contours);
-    // After aligning diastole contours:
-    diastole_contours = align_contours(diastole_contours);
+    diastole_contours.sort_by_key(|(frame, _)| std::cmp::Reverse(*frame)); // Sort by frame_index in descending order
 
     // Reindex diastole contours:
     diastole_contours = diastole_contours
@@ -30,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
 
     // Write the diastole mesh.
-    write_obj_mesh(&diastole_contours, "diastole.obj")?;
+    write_obj_mesh(&diastole_contours, "output/diastole.obj")?;
 
     // === SYSTOLE PROCESSING ===
     let systole_points = read_contour_data("input/rest_csv_files/systolic_contours.csv")?;
@@ -40,6 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let mut systole_contours: Vec<(u32, Vec<_>)> = systole_groups.into_iter().collect();
     systole_contours = align_contours(systole_contours);
+    systole_contours.sort_by_key(|(frame, _)| std::cmp::Reverse(*frame)); // Sort by frame_index in descending order
 
     // Reindex systole contours:
     systole_contours = systole_contours
@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .collect();
 
     // Write the systole mesh.
-    write_obj_mesh(&systole_contours, "systole.obj")?;
+    write_obj_mesh(&systole_contours, "output/systole.obj")?;
 
     // === INTERPOLATION BETWEEN DIASTOLE AND SYSTOLE ===
     println!("--- Interpolating Meshes ---");
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Write each interpolated mesh to its own OBJ file.
     for (i, intermediate) in interpolated_meshes.iter().enumerate() {
-        let filename = format!("mesh_{:03}.obj", i);
+        let filename = format!("output/mesh_{:03}.obj", i);
         write_obj_mesh(intermediate, &filename)?;
     }
 

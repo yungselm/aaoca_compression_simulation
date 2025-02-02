@@ -261,9 +261,9 @@ pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, 
     contours
 }
 
-/// Interpolate between two aligned sets of contours.
-/// For each corresponding point in start and end, a linear interpolation is performed.
-/// If the number of contours differs, the longer set is trimmed to the shorter one.
+// Interpolate between two aligned sets of contours.
+// For each corresponding point in start and end, a linear interpolation is performed.
+// If the number of contours differs, the longer set is trimmed to the shorter one.
 pub fn interpolate_contours(
     contours_start: &[(u32, Vec<ContourPoint>)],
     contours_end: &[(u32, Vec<ContourPoint>)],
