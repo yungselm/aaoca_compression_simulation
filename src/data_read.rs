@@ -6,7 +6,7 @@ use std::path::Path;
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct ContourPoint {
-    pub frame_index: u32,
+    pub frame_index: u32,   // New field
     pub x: f64,
     pub y: f64,
     pub z: f64,
