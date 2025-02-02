@@ -3,14 +3,15 @@ use std::error::Error;
 use std::fs::File;
 use std::path::Path;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[allow(dead_code)]
 pub struct ContourPoint {
-    pub frame_index: u32,   // New field
+    pub frame_index: u32,
     pub x: f64,
     pub y: f64,
     pub z: f64,
 }
+
 
 pub fn read_contour_data<P: AsRef<Path>>(path: P) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
     let file = File::open(path)?;
