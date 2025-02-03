@@ -121,8 +121,7 @@ pub fn write_obj_mesh(
     filename: &str,
 ) -> Result<(), Box<dyn Error>> {
     // Make a copy and sort by frame_index.
-    let mut sorted_contours = contours.to_owned();
-    sorted_contours.sort_by_key(|(frame_index, _)| *frame_index);
+    let sorted_contours = contours.to_owned();
 
     if sorted_contours.len() < 2 {
         return Err("Need at least two contours to create a mesh.".into());
@@ -270,7 +269,6 @@ pub fn interpolate_contours(
 ) -> Result<Vec<Vec<(u32, Vec<ContourPoint>)>>, Box<dyn Error>> {
     use std::cmp::min;
 
-    // Trim the sets to the same number.
     let n = min(contours_start.len(), contours_end.len());
     let start = &contours_start[0..n];
     let end = &contours_end[0..n];
