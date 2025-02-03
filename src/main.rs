@@ -28,7 +28,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|(i, (_, contour))| (i as u32, contour))
         .collect();
 
-    // Write the diastole mesh.
     write_obj_mesh(&diastole_contours, "output/diastole.obj")?;
 
     // === SYSTOLE PROCESSING ===

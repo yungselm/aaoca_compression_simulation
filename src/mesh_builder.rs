@@ -1,5 +1,4 @@
 use crate::data_read::ContourPoint;
-use std::cmp::min;
 use std::error::Error;
 use std::f64::consts::PI;
 use std::fs::File;
@@ -66,12 +65,12 @@ pub fn translate_contour(contour: &mut [ContourPoint], translation: (f64, f64)) 
 }
 
 /// Given a contour, find the pair of points with the maximum distance between them.
-/// Returns ((p1, p2), distance). (This is O(n²); assume n is small.)
+/// Returns ((p1, p2), distance).
 pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
     let mut max_dist = 0.0;
     let mut farthest_pair = (&contour[0], &contour[0]);
     for i in 0..contour.len() {
-        for j in i + 1..contour.len() {
+        for j in i + 1..contour.len() { // currently O(n²), could be optimized
             let dx = contour[i].x - contour[j].x;
             let dy = contour[i].y - contour[j].y;
             let dist = (dx * dx + dy * dy).sqrt();
@@ -92,7 +91,7 @@ pub fn find_best_rotation(reference: &[ContourPoint], target: &[ContourPoint]) -
     let mut best_angle = 0.0;
     let mut best_error = std::f64::MAX;
     let steps = 400;
-    let range = 0.2;
+    let range = 1.05; // around +/- 60 degrees
     let start = -range;
     let end = range;
     let increment = (end - start) / (steps as f64);
@@ -115,7 +114,7 @@ pub fn find_best_rotation(reference: &[ContourPoint], target: &[ContourPoint]) -
     best_angle
 }
 
-/// Writes an OBJ file connecting each adjacent pair of contours (each as a slice of ContourPoint)
+/// Writes an OBJ file connecting each neighboring pair of contours (each as a slice of ContourPoint)
 /// by creating two triangles per quad.
 pub fn write_obj_mesh(
     contours: &[(u32, Vec<ContourPoint>)],
@@ -173,7 +172,7 @@ pub fn write_obj_mesh(
     Ok(())
 }
 
-/// Align a vector of contours by choosing the one with the highest frame index as reference.
+/// Align a vector of contours by choosing the one with the highest frame index as reference (always ostium).
 /// The alignment rotates the reference contour so that its farthest-points line is vertical,
 /// then rotates each other contour to best match the reference, and finally translates all
 /// contours so that their centroids coincide with the reference centroid.

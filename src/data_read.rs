@@ -25,8 +25,6 @@ pub fn read_contour_data<P: AsRef<Path>>(path: P) -> Result<Vec<ContourPoint>, B
     for result in rdr.records() {
         match result {
             Ok(record) => {
-                println!("Raw record: {:?}", record);
-
                 match record.deserialize(None) {
                     Ok(point) => points.push(point),
                     Err(e) => eprintln!("Skipping invalid record: {:?}", e),
