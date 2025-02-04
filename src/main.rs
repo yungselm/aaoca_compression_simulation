@@ -49,7 +49,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // *** Sort systolic contours the same way as diastole.
     systole_contours.sort_by_key(|(frame, _)| std::cmp::Reverse(*frame));
 
-    // Re-index systolic contours.
+    // Re-index systolic contours. So that ostium is index 0. 
     systole_contours = systole_contours
         .into_iter()
         .enumerate()
@@ -69,6 +69,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             diastolic_ref_centroid.1 - systolic_centroid.1,
         );
         translate_contour(contour, translation);
+    }
+
+    // move whole stack on z-axis so both stacks have same z-coordinates
+    let z_translation = diastole_contours[0].1[0].z - systole_contours[0].1[0].z;
+    for (_, ref mut contour) in systole_contours.iter_mut() {
+        for p in contour {
+            p.z += z_translation;
+        }
     }
     
     let _min_len = trim_to_same_length(&mut diastole_contours, &mut systole_contours);
