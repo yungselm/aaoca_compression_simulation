@@ -70,7 +70,8 @@ pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &Conto
     let mut max_dist = 0.0;
     let mut farthest_pair = (&contour[0], &contour[0]);
     for i in 0..contour.len() {
-        for j in i + 1..contour.len() { // currently O(n²), could be optimized
+        for j in i + 1..contour.len() {
+            // currently O(n²), could be optimized
             let dx = contour[i].x - contour[j].x;
             let dy = contour[i].y - contour[j].y;
             let dist = (dx * dx + dy * dy).sqrt();
@@ -85,7 +86,7 @@ pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &Conto
 
 /// Given two contours (assumed to have the same number of points),
 /// find a "best" rotation angle (in radians) for the target contour that minimizes
-/// the sum of squared distances to the reference contour. 
+/// the sum of squared distances to the reference contour.
 /// Both contours are assumed to be centered (i.e. their centroids subtracted).
 pub fn find_best_rotation(reference: &[ContourPoint], target: &[ContourPoint]) -> f64 {
     let mut best_angle = 0.0;
@@ -175,10 +176,12 @@ pub fn write_obj_mesh(
 /// The alignment rotates the reference contour so that its farthest-points line is vertical,
 /// then rotates each other contour to best match the reference, and finally translates all
 /// contours so that their centroids coincide with the reference centroid.
-/// 
+///
 /// The input is a vector of tuples: (contour_id, contour_points).
 /// Returns the aligned contours.
-pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, Vec<ContourPoint>)> {
+pub fn align_contours(
+    mut contours: Vec<(u32, Vec<ContourPoint>)>,
+) -> Vec<(u32, Vec<ContourPoint>)> {
     // First, ensure every contour is sorted in the same manner.
     for (_, contour) in contours.iter_mut() {
         sort_contour_points(contour);
@@ -247,12 +250,18 @@ pub fn align_contours(mut contours: Vec<(u32, Vec<ContourPoint>)>) -> Vec<(u32, 
             .collect();
 
         let best_rot = find_best_rotation(&centered_reference, &centered);
-        println!("Rotating contour {} by {:.3} rad for best correlation", id, best_rot);
+        println!(
+            "Rotating contour {} by {:.3} rad for best correlation",
+            id, best_rot
+        );
         rotate_contour(contour, best_rot, orig_centroid);
         // Re-sort each contour after rotation.
         sort_contour_points(contour);
         let new_centroid = compute_centroid(contour);
-        let translation = (ref_centroid.0 - new_centroid.0, ref_centroid.1 - new_centroid.1);
+        let translation = (
+            ref_centroid.0 - new_centroid.0,
+            ref_centroid.1 - new_centroid.1,
+        );
         translate_contour(contour, translation);
     }
 
