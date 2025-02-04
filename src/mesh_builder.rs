@@ -121,7 +121,6 @@ pub fn write_obj_mesh(
     contours: &[(u32, Vec<ContourPoint>)],
     filename: &str,
 ) -> Result<(), Box<dyn Error>> {
-    // Make a copy and sort by frame_index.
     let sorted_contours = contours.to_owned();
 
     if sorted_contours.len() < 2 {
@@ -139,36 +138,60 @@ pub fn write_obj_mesh(
     let mut writer = BufWriter::new(file);
     let mut vertex_offsets = Vec::new();
     let mut current_offset = 1;
+    let mut normals = Vec::new();
 
-    // Write vertices.
+    // Write vertices and compute normals
     for (_, contour) in &sorted_contours {
         vertex_offsets.push(current_offset);
+        let centroid = compute_centroid(contour);
         for point in contour {
+            // Write vertex
             writeln!(writer, "v {} {} {}", point.x, point.y, point.z)?;
+            
+            // Compute normal direction from centroid to point (radial outward)
+            let dx = point.x - centroid.0;
+            let dy = point.y - centroid.1;
+            let length = (dx * dx + dy * dy).sqrt();
+            
+            // Normalize and handle zero-length case
+            let (nx, ny, nz) = if length > 0.0 {
+                (dx / length, dy / length, 0.0)
+            } else {
+                (0.0, 0.0, 0.0)
+            };
+            normals.push((nx, ny, nz));
+            
             current_offset += 1;
         }
     }
 
-    // Write faces.
+    // Write normals
+    for (nx, ny, nz) in &normals {
+        writeln!(writer, "vn {} {} {}", nx, ny, nz)?;
+    }
+
+    // Write faces with normals
     for c in 0..(sorted_contours.len() - 1) {
         let offset1 = vertex_offsets[c];
         let offset2 = vertex_offsets[c + 1];
         for j in 0..points_per_contour {
             let j_next = (j + 1) % points_per_contour;
-            // Triangle 1.
+            
+            // Triangle 1
             let v1 = offset1 + j;
             let v2 = offset1 + j_next;
             let v3 = offset2 + j;
-            writeln!(writer, "f {} {} {}", v1, v2, v3)?;
-            // Triangle 2.
-            let v1 = offset2 + j;
-            let v2 = offset1 + j_next;
-            let v3 = offset2 + j_next;
-            writeln!(writer, "f {} {} {}", v1, v2, v3)?;
+            writeln!(writer, "f {}//{} {}//{} {}//{}", v1, v1, v2, v2, v3, v3)?;
+            
+            // Triangle 2
+            let v1_t2 = offset2 + j;
+            let v2_t2 = offset1 + j_next;
+            let v3_t2 = offset2 + j_next;
+            writeln!(writer, "f {}//{} {}//{} {}//{}", v1_t2, v1_t2, v2_t2, v2_t2, v3_t2, v3_t2)?;
         }
     }
 
-    println!("OBJ mesh successfully written to {}", filename);
+    println!("OBJ mesh with normals written to {}", filename);
     Ok(())
 }
 
@@ -249,20 +272,19 @@ pub fn align_contours(
             })
             .collect();
 
+        let translation = (
+            ref_centroid.0 - orig_centroid.0,
+            ref_centroid.1 - orig_centroid.1,
+        );
+        translate_contour(contour, translation);
         let best_rot = find_best_rotation(&centered_reference, &centered);
         println!(
             "Rotating contour {} by {:.3} rad for best correlation",
             id, best_rot
         );
-        rotate_contour(contour, best_rot, orig_centroid);
+        rotate_contour(contour, best_rot, ref_centroid);
         // Re-sort each contour after rotation.
         sort_contour_points(contour);
-        let new_centroid = compute_centroid(contour);
-        let translation = (
-            ref_centroid.0 - new_centroid.0,
-            ref_centroid.1 - new_centroid.1,
-        );
-        translate_contour(contour, translation);
     }
 
     contours
