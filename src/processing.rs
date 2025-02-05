@@ -1,20 +1,16 @@
-use crate::data_read::ContourPoint;
+use crate::io::ContourPoint;
 use std::error::Error;
 use std::f64::consts::PI;
-use std::fs::File;
-use std::io::{BufWriter, Write};
 
-/// Compute the centroid (average x,y) of a contour.
+/// Computes the centroid (average x, y) of a contour.
 pub fn compute_centroid(contour: &[ContourPoint]) -> (f64, f64) {
-    let (sum_x, sum_y) = contour
-        .iter()
-        .fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
+    let (sum_x, sum_y) = contour.iter().fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
     let n = contour.len() as f64;
     (sum_x / n, sum_y / n)
 }
 
-/// Sort a contour’s points in counterclockwise order around its centroid,
-/// and then rotate the vector so that the highest y-value is first.
+/// Sorts contour points in counterclockwise order around the centroid
+/// and rotates so that the highest y-value is first.
 pub fn sort_contour_points(contour: &mut Vec<ContourPoint>) {
     let center = compute_centroid(contour);
     contour.sort_by(|a, b| {
@@ -31,7 +27,7 @@ pub fn sort_contour_points(contour: &mut Vec<ContourPoint>) {
     contour.rotate_left(start_idx);
 }
 
-/// Rotate a point about a given center by an angle (in radians).
+/// Rotates a single point about a center by a given angle (in radians).
 pub fn rotate_point(p: &ContourPoint, angle: f64, center: (f64, f64)) -> ContourPoint {
     let (cx, cy) = center;
     let x = p.x - cx;
@@ -46,7 +42,7 @@ pub fn rotate_point(p: &ContourPoint, angle: f64, center: (f64, f64)) -> Contour
     }
 }
 
-/// Rotate all points in a contour about a given center.
+/// Rotates all points in a contour about a center.
 pub fn rotate_contour(contour: &mut [ContourPoint], angle: f64, center: (f64, f64)) {
     for p in contour.iter_mut() {
         let rotated = rotate_point(p, angle, center);
@@ -55,7 +51,7 @@ pub fn rotate_contour(contour: &mut [ContourPoint], angle: f64, center: (f64, f6
     }
 }
 
-/// Translate a contour by a (dx,dy) vector.
+/// Translates a contour by a given (dx, dy) offset.
 pub fn translate_contour(contour: &mut [ContourPoint], translation: (f64, f64)) {
     let (dx, dy) = translation;
     for p in contour.iter_mut() {
@@ -64,14 +60,12 @@ pub fn translate_contour(contour: &mut [ContourPoint], translation: (f64, f64)) 
     }
 }
 
-/// Given a contour, find the pair of points with the maximum distance between them.
-/// Returns ((p1, p2), distance).
+/// Finds the pair of farthest points in a contour.
 pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
     let mut max_dist = 0.0;
     let mut farthest_pair = (&contour[0], &contour[0]);
     for i in 0..contour.len() {
         for j in i + 1..contour.len() {
-            // currently O(n²), could be optimized
             let dx = contour[i].x - contour[j].x;
             let dy = contour[i].y - contour[j].y;
             let dist = (dx * dx + dy * dy).sqrt();
@@ -84,15 +78,16 @@ pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &Conto
     (farthest_pair, max_dist)
 }
 
-/// Given two contours (assumed to have the same number of points),
-/// find a "best" rotation angle (in radians) for the target contour that minimizes
-/// the sum of squared distances to the reference contour.
-/// Both contours are assumed to be centered (i.e. their centroids subtracted).
-pub fn find_best_rotation(reference: &[ContourPoint], target: &[ContourPoint]) -> f64 {
+/// Finds the best rotation angle (in radians) that minimizes the squared error
+/// between a reference and target contour (both assumed centered).
+pub fn find_best_rotation(
+    reference: &[ContourPoint],
+    target: &[ContourPoint],
+) -> f64 {
     let mut best_angle = 0.0;
     let mut best_error = std::f64::MAX;
     let steps = 400;
-    let range = 1.05; // around +/- 60 degrees
+    let range = 1.05; // approximately +/- 60 degrees in radians
     let start = -range;
     let end = range;
     let increment = (end - start) / (steps as f64);
@@ -115,105 +110,20 @@ pub fn find_best_rotation(reference: &[ContourPoint], target: &[ContourPoint]) -
     best_angle
 }
 
-/// Writes an OBJ file connecting each neighboring pair of contours (each as a slice of ContourPoint)
-/// by creating two triangles per quad.
-pub fn write_obj_mesh(
-    contours: &[(u32, Vec<ContourPoint>)],
-    filename: &str,
-) -> Result<(), Box<dyn Error>> {
-    let sorted_contours = contours.to_owned();
-
-    if sorted_contours.len() < 2 {
-        return Err("Need at least two contours to create a mesh.".into());
-    }
-
-    let points_per_contour = sorted_contours[0].1.len();
-    for (_, contour) in &sorted_contours {
-        if contour.len() != points_per_contour {
-            return Err("All contours must have the same number of points.".into());
-        }
-    }
-
-    let file = File::create(filename)?;
-    let mut writer = BufWriter::new(file);
-    let mut vertex_offsets = Vec::new();
-    let mut current_offset = 1;
-    let mut normals = Vec::new();
-
-    // Write vertices and compute normals
-    for (_, contour) in &sorted_contours {
-        vertex_offsets.push(current_offset);
-        let centroid = compute_centroid(contour);
-        for point in contour {
-            // Write vertex
-            writeln!(writer, "v {} {} {}", point.x, point.y, point.z)?;
-            
-            // Compute normal direction from centroid to point (radial outward)
-            let dx = point.x - centroid.0;
-            let dy = point.y - centroid.1;
-            let length = (dx * dx + dy * dy).sqrt();
-            
-            // Normalize and handle zero-length case
-            let (nx, ny, nz) = if length > 0.0 {
-                (dx / length, dy / length, 0.0)
-            } else {
-                (0.0, 0.0, 0.0)
-            };
-            normals.push((nx, ny, nz));
-            
-            current_offset += 1;
-        }
-    }
-
-    // Write normals
-    for (nx, ny, nz) in &normals {
-        writeln!(writer, "vn {} {} {}", nx, ny, nz)?;
-    }
-
-    // Write faces with normals
-    for c in 0..(sorted_contours.len() - 1) {
-        let offset1 = vertex_offsets[c];
-        let offset2 = vertex_offsets[c + 1];
-        for j in 0..points_per_contour {
-            let j_next = (j + 1) % points_per_contour;
-            
-            // Triangle 1
-            let v1 = offset1 + j;
-            let v2 = offset1 + j_next;
-            let v3 = offset2 + j;
-            writeln!(writer, "f {}//{} {}//{} {}//{}", v1, v1, v2, v2, v3, v3)?;
-            
-            // Triangle 2
-            let v1_t2 = offset2 + j;
-            let v2_t2 = offset1 + j_next;
-            let v3_t2 = offset2 + j_next;
-            writeln!(writer, "f {}//{} {}//{} {}//{}", v1_t2, v1_t2, v2_t2, v2_t2, v3_t2, v3_t2)?;
-        }
-    }
-
-    println!("OBJ mesh with normals written to {}", filename);
-    Ok(())
-}
-
-/// Align a vector of contours by choosing the one with the highest frame index as reference (always ostium).
-/// The alignment rotates the reference contour so that its farthest-points line is vertical,
-/// then rotates each other contour to best match the reference, and finally translates all
-/// contours so that their centroids coincide with the reference centroid.
-///
-/// The input is a vector of tuples: (contour_id, contour_points).
-/// Returns the aligned contours.
+/// Aligns contours by rotating and translating them so that a designated
+/// reference contour (e.g., with the highest frame index) is used as the basis.
 pub fn align_contours(
     mut contours: Vec<(u32, Vec<ContourPoint>)>,
 ) -> Vec<(u32, Vec<ContourPoint>)> {
-    // First, ensure every contour is sorted in the same manner.
+    // First, ensure every contour is sorted consistently.
     for (_, contour) in contours.iter_mut() {
         sort_contour_points(contour);
     }
 
-    // Sort contours by frame_index.
+    // Sort contours by frame index.
     contours.sort_by_key(|(frame_index, _)| *frame_index);
 
-    // Identify the reference contour: the one with the highest frame_index.
+    // Use the contour with the highest frame index as reference.
     let reference_index = contours.iter().map(|(id, _)| *id).max().unwrap();
     let reference_pos = contours
         .iter()
@@ -222,36 +132,31 @@ pub fn align_contours(
     let (ref_frame, ref_contour) = &contours[reference_pos];
     println!("Using contour {} as reference.", ref_frame);
 
-    // Find the farthest points in the reference contour.
+    // Rotate the reference contour so that its farthest-points line is vertical.
     let ((p1, p2), _dist) = find_farthest_points(ref_contour);
     let dx = p2.x - p1.x;
     let dy = p2.y - p1.y;
     let line_angle = dy.atan2(dx);
-    // We want the line to be vertical (i.e. at PI/2).
     let rotation_to_y = (PI / 2.0) - line_angle;
     println!(
         "Reference line angle: {:.3} rad; rotating reference by {:.3} rad",
         line_angle, rotation_to_y
     );
-
-    // Rotate the reference contour about its centroid.
     let ref_centroid = compute_centroid(ref_contour);
-    let mut aligned_reference = (*ref_contour).clone();
+    let mut aligned_reference = ref_contour.clone();
     rotate_contour(&mut aligned_reference, rotation_to_y, ref_centroid);
-    // Re-sort the reference after rotation to ensure the highest-y point is first.
     sort_contour_points(&mut aligned_reference);
     contours[reference_pos].1 = aligned_reference.clone();
 
-    // Extract a clone of the reference contour so we can use it immutably.
     let reference_clone = contours[reference_pos].1.clone();
 
-    // Align each non-reference contour.
+    // Align every non-reference contour.
     for (id, contour) in contours.iter_mut() {
         if *id == reference_index {
             continue;
         }
         let orig_centroid = compute_centroid(contour);
-        // Center the contour.
+        // Center the contour and the reference.
         let centered: Vec<ContourPoint> = contour
             .iter()
             .map(|p| ContourPoint {
@@ -261,7 +166,6 @@ pub fn align_contours(
                 z: p.z,
             })
             .collect();
-        // Center the reference using our pre-cloned reference.
         let centered_reference: Vec<ContourPoint> = reference_clone
             .iter()
             .map(|p| ContourPoint {
@@ -272,10 +176,8 @@ pub fn align_contours(
             })
             .collect();
 
-        let translation = (
-            ref_centroid.0 - orig_centroid.0,
-            ref_centroid.1 - orig_centroid.1,
-        );
+        // Translate contour to match reference.
+        let translation = (ref_centroid.0 - orig_centroid.0, ref_centroid.1 - orig_centroid.1);
         translate_contour(contour, translation);
         let best_rot = find_best_rotation(&centered_reference, &centered);
         println!(
@@ -283,16 +185,13 @@ pub fn align_contours(
             id, best_rot
         );
         rotate_contour(contour, best_rot, ref_centroid);
-        // Re-sort each contour after rotation.
         sort_contour_points(contour);
     }
 
     contours
 }
 
-// Interpolate between two aligned sets of contours.
-// For each corresponding point in start and end, a linear interpolation is performed.
-// If the number of contours differs, the longer set is trimmed to the shorter one.
+/// Interpolates between two aligned sets of contours.
 pub fn interpolate_contours(
     contours_start: &[(u32, Vec<ContourPoint>)],
     contours_end: &[(u32, Vec<ContourPoint>)],
