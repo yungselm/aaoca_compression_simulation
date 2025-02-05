@@ -6,29 +6,39 @@ use data_read::read_contour_data;
 use mesh_builder::{
     align_contours, compute_centroid, interpolate_contours, translate_contour, write_obj_mesh,
 };
-use std::collections::HashMap;
 use std::error::Error;
+use std::path::Path;
 use utils::trim_to_same_length;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // === DIASTOLE PROCESSING ===
-    println!("--- Processing Diastole ---");
-    let diastole_points = read_contour_data("input/rest_csv_files/diastolic_contours.csv")?;
+    // Process both rest and stress cases
+    process_case("rest", "input/rest_csv_files", "output/rest")?;
+    process_case("stress", "input/stress_csv_files", "output/stress")?;
+    Ok(())
+}
 
+fn process_case(
+    case_name: &str,
+    input_dir: &str,
+    output_dir: &str,
+) -> Result<(), Box<dyn Error>> {
+    // Create output directory if it doesn't exist
+    std::fs::create_dir_all(output_dir)?;
+
+    // === DIASTOLE PROCESSING ===
+    println!("--- Processing {} Diastole ---", case_name);
+    let diastole_path = Path::new(input_dir).join("diastolic_contours.csv");
+    let diastole_points = read_contour_data(diastole_path.to_str().unwrap())?;
     let mut diastole_contours = creating_contours(diastole_points);
 
     // === SYSTOLE PROCESSING ===
-    println!("--- Processing Systole ---");
-    let systole_points = read_contour_data("input/rest_csv_files/systolic_contours.csv")?;
-
+    println!("--- Processing {} Systole ---", case_name);
+    let systole_path = Path::new(input_dir).join("systolic_contours.csv");
+    let systole_points = read_contour_data(systole_path.to_str().unwrap())?;
     let mut systole_contours = creating_contours(systole_points);
 
-    // *** Translate systolic contours to diastolic (ostium) centroid:
+    // Translate systolic contours to diastolic centroid
     let diastolic_ref_centroid = compute_centroid(&diastole_contours[0].1);
-    println!(
-        "Diastolic (ostium) centroid: ({:.3}, {:.3})",
-        diastolic_ref_centroid.0, diastolic_ref_centroid.1
-    );
     for (_, ref mut contour) in systole_contours.iter_mut() {
         let systolic_centroid = compute_centroid(contour);
         let translation = (
@@ -38,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         translate_contour(contour, translation);
     }
 
-    // move whole stack on z-axis so both stacks have same z-coordinates
+    // Adjust z-axis coordinates
     let z_translation = diastole_contours[0].1[0].z - systole_contours[0].1[0].z;
     for (_, ref mut contour) in systole_contours.iter_mut() {
         for p in contour {
@@ -46,20 +56,23 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let _min_len = trim_to_same_length(&mut diastole_contours, &mut systole_contours);
-    // Write the meshes
-    write_obj_mesh(&diastole_contours, "output/diastole_rest.obj")?;
-    write_obj_mesh(&systole_contours, "output/systole_rest.obj")?;
+    trim_to_same_length(&mut diastole_contours, &mut systole_contours);
 
-    // === INTERPOLATION BETWEEN DIASTOLE AND SYSTOLE ===
-    println!("--- Interpolating Meshes ---");
+    // Write base meshes
+    let diastole_output = Path::new(output_dir).join(format!("diastole_{}.obj", case_name));
+    let systole_output = Path::new(output_dir).join(format!("systole_{}.obj", case_name));
+    write_obj_mesh(&diastole_contours, diastole_output.to_str().unwrap())?;
+    write_obj_mesh(&systole_contours, systole_output.to_str().unwrap())?;
+
+    // === INTERPOLATION ===
+    println!("--- Interpolating {} Meshes ---", case_name);
     let steps = 30;
     let interpolated_meshes = interpolate_contours(&diastole_contours, &systole_contours, steps)?;
 
-    // Write each interpolated mesh.
+    // Write interpolated meshes
     for (i, intermediate) in interpolated_meshes.iter().enumerate() {
-        let filename = format!("output/mesh_{:03}_rest.obj", i);
-        write_obj_mesh(intermediate, &filename)?;
+        let filename = Path::new(output_dir).join(format!("mesh_{:03}_{}.obj", i, case_name));
+        write_obj_mesh(intermediate, filename.to_str().unwrap())?;
     }
 
     Ok(())
@@ -68,25 +81,22 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn creating_contours(
     points: Vec<data_read::ContourPoint>,
 ) -> Vec<(u32, Vec<data_read::ContourPoint>)> {
-    // Group points by their (arbitrary) frame id.
-    let mut groups: HashMap<u32, Vec<_>> = HashMap::new();
+    // Group points by their frame index
+    use std::collections::HashMap;
+    let mut groups = HashMap::new();
     for p in points {
-        groups.entry(p.frame_index).or_default().push(p);
+        groups.entry(p.frame_index).or_insert(vec![]).push(p);
     }
-    let mut contours: Vec<(u32, Vec<_>)> = groups.into_iter().collect();
 
-    // Align contours (each contour’s internal order is sorted, but we leave the outer vector order unchanged)
+    let mut contours: Vec<_> = groups.into_iter().collect();
+    
+    // Align and sort contours
     contours = align_contours(contours);
-
-    // *** Sort the aligned diastolic contours once here:
-    // Sort in descending order so that the contour with the highest original frame index (the ostium) comes first.
     contours.sort_by_key(|(frame, _)| std::cmp::Reverse(*frame));
-
-    // *** Re-index so that index 0 is the ostium.
-    contours = contours
-        .into_iter()
+    
+    // Re-index contours
+    contours.into_iter()
         .enumerate()
-        .map(|(i, (_, contour))| (i as u32, contour))
-        .collect();
-    contours
+        .map(|(i, (_, points))| (i as u32, points))
+        .collect()
 }
