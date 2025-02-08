@@ -78,6 +78,27 @@ pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &Conto
     (farthest_pair, max_dist)
 }
 
+/// Find the closest opposite points
+pub fn find_closest_opposite(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
+    let mut min_dist = f64::MAX;
+    let mut closest_pair = (&contour[0], &contour[0]);
+
+    let n = contour.len();
+    for i in 0..n / 2 {
+        let j = n - 1 - i; // Opposite index of i
+        let dx = contour[i].x - contour[j].x;
+        let dy = contour[i].y - contour[j].y;
+        let dist = (dx * dx + dy * dy).sqrt(); // Euclidean distance
+
+        if dist < min_dist {
+            min_dist = dist;
+            closest_pair = (&contour[i], &contour[j]);
+        }
+    }
+
+    (closest_pair, min_dist)
+}
+
 /// Finds the best rotation angle (in radians) that minimizes the squared error
 /// between a reference and target contour (both assumed centered).
 pub fn find_best_rotation(
