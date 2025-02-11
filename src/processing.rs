@@ -108,7 +108,8 @@ pub fn find_best_rotation(
     let mut best_angle = 0.0;
     let mut best_error = std::f64::MAX;
     let steps = 400;
-    let range = 1.05; // approximately +/- 60 degrees in radians
+    // let range = 1.05; // approximately +/- 60 degrees in radians
+    let range = 0.52; // approximately +/- 30 degrees in radians
     let start = -range;
     let end = range;
     let increment = (end - start) / (steps as f64);

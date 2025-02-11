@@ -33,14 +33,15 @@ pub fn read_contour_data<P: AsRef<Path>>(path: P) -> Result<Vec<ContourPoint>, B
     Ok(points)
 }
 
-/// Writes an OBJ mesh file for the given contours.
 pub fn write_obj_mesh(
     contours: &[(u32, Vec<ContourPoint>)],
+    uv_coords: &[(f32, f32)],
     filename: &str,
+    mtl_filename: &str,
 ) -> Result<(), Box<dyn Error>> {
-    // (We reuse your existing logic here; you might consider refactoring parts further.)
     let sorted_contours = contours.to_owned();
 
+    // Validation
     if sorted_contours.len() < 2 {
         return Err("Need at least two contours to create a mesh.".into());
     }
@@ -77,12 +78,31 @@ pub fn write_obj_mesh(
         }
     }
 
+    // Validate UV coordinates
+    if uv_coords.len() != current_offset - 1 {
+        return Err(format!(
+            "UV coordinates must match the number of vertices. Expected {}, got {}.",
+            current_offset - 1,
+            uv_coords.len()
+        ).into());
+    }
+
+    // Write material reference
+    writeln!(writer, "mtllib {}", mtl_filename)?;
+    writeln!(writer, "usemtl displacement_material")?;
+    
+
+    // Write UV coordinates
+    for (u, v) in uv_coords {
+        writeln!(writer, "vt {} {}", u, v)?;
+    }
+
     // Write normals
     for (nx, ny, nz) in &normals {
         writeln!(writer, "vn {} {} {}", nx, ny, nz)?;
     }
 
-    // Write faces with normals
+    // Write faces with normals and UVs
     for c in 0..(sorted_contours.len() - 1) {
         let offset1 = vertex_offsets[c];
         let offset2 = vertex_offsets[c + 1];
@@ -91,11 +111,19 @@ pub fn write_obj_mesh(
             let v1 = offset1 + j;
             let v2 = offset1 + j_next;
             let v3 = offset2 + j;
-            writeln!(writer, "f {}//{} {}//{} {}//{}", v1, v1, v2, v2, v3, v3)?;
+            writeln!(
+                writer,
+                "f {0}/{0}/{0} {1}/{1}/{1} {2}/{2}/{2}",
+                v1, v2, v3
+            )?;
             let v1_t2 = offset2 + j;
             let v2_t2 = offset1 + j_next;
             let v3_t2 = offset2 + j_next;
-            writeln!(writer, "f {}//{} {}//{} {}//{}", v1_t2, v1_t2, v2_t2, v2_t2, v3_t2, v3_t2)?;
+            writeln!(
+                writer,
+                "f {0}/{0}/{0} {1}/{1}/{1} {2}/{2}/{2}",
+                v1_t2, v2_t2, v3_t2
+            )?;
         }
     }
 

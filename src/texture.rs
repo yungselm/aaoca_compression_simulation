@@ -5,6 +5,7 @@ use std::path::Path;
 use std::error::Error;
 use serde::Deserialize;
 use image::{ImageBuffer, Rgb};
+use crate::io::ContourPoint;
 
 pub fn compute_uv_coordinates(contours: &[(u32, Vec<ContourPoint>)]) -> Vec<(f32, f32)> {
     let points_per_contour = contours[0].1.len();
@@ -12,9 +13,10 @@ pub fn compute_uv_coordinates(contours: &[(u32, Vec<ContourPoint>)]) -> Vec<(f32
     let mut uvs = Vec::with_capacity(num_contours * points_per_contour);
 
     for c in 0..num_contours {
-        let v = (c as f32 + 0.5) / num_contours as f32;
+        // Use 0.5_f32 so that the literal is f32.
+        let v = (c as f32 + 0.5_f32) / num_contours as f32;
         for p in 0..points_per_contour {
-            let u = (p as f32 + 0.5) / points_per_contour as f32;
+            let u = (p as f32 + 0.5_f32) / points_per_contour as f32;
             uvs.push((u, v));
         }
     }
@@ -34,7 +36,8 @@ pub fn compute_displacements(
             let dx = point.x - diastole_point.x;
             let dy = point.y - diastole_point.y;
             let dz = point.z - diastole_point.z;
-            displacements.push((dx * dx + dy * dy + dz * dz).sqrt());
+            // Compute the displacement and cast to f32.
+            displacements.push(((dx * dx + dy * dy + dz * dz).sqrt()) as f32);
         }
     }
     displacements
