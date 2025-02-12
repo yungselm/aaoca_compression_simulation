@@ -9,13 +9,9 @@ This code takes the output of the ["AIVUS-CAA"](https://github.com/AI-in-Cardiov
 
 An example for phasic compression:
 
-\newline
-
 ![Phasic Compression](media/phasic_compression.gif)
 
 And with additional uv texture map:
-
-\newline
 
 ![Phasic Compression UV](media/uv_map.gif)
 
