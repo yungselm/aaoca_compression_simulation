@@ -1,4 +1,3 @@
-// Ensure these modules are declared at the top of src/main.rs:
 mod io;
 mod contour;
 mod processing;
