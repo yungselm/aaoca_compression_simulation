@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::io::ContourPoint;
 
 /// Trims two vectors so that both have the same length.

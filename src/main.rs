@@ -89,6 +89,17 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
         .chain(interpolated_meshes.iter().map(|m| &m[..]))
         .collect::<Vec<_>>();
 
+    // STUPID FIX since these two are always wrong: Filter out the ones with indices 1 and 2.
+    let all_contour_meshes: Vec<_> = all_contour_meshes
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, mesh)| {
+            if i == 1 || i == 2 { None } else { Some(mesh) }
+        })
+        .collect();
+
+
+
         
     // === Compute Maximum Displacement for Normalization ===
     let mut max_disp: f32 = 0.0;
@@ -102,6 +113,15 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
         .chain(std::iter::once(&systole_catheter_contours[..]))
         .chain(interpolated_catheter_meshes.iter().map(|m| &m[..]))
         .collect::<Vec<_>>();
+    
+    // STUPID FIX since these two are always wrong: Filter out the ones with indices 1 and 2.
+    let all_catheter_meshes: Vec<_> = all_catheter_meshes
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, mesh)| {
+            if i == 1 || i == 2 { None } else { Some(mesh) }
+        })
+        .collect();    
 
     // --- Process Regular (Contour) Meshes ---
     for (i, mesh) in all_contour_meshes.into_iter().enumerate() {

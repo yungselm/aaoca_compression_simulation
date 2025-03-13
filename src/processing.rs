@@ -240,7 +240,7 @@ pub fn interpolate_contours(
                 .iter()
                 .zip(contour_end.iter())
                 .map(|(p_start, p_end)| ContourPoint {
-                    frame_index: *id_start,
+                    frame_index: step as u32, // new sequential id for this interpolation step
                     x: p_start.x * (1.0 - t) + p_end.x * t,
                     y: p_start.y * (1.0 - t) + p_end.y * t,
                     z: p_start.z * (1.0 - t) + p_end.z * t,
