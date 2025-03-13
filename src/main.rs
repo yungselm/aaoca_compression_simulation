@@ -12,10 +12,8 @@ use std::error::Error;
 use io::{read_contour_data, create_catheter_points, write_obj_mesh};
 use contour::create_contours;
 use processing::{compute_centroid, translate_contour};
-use utils::trim_to_same_length;
+use utils::{trim_to_same_length, smooth_contours};
 use texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture};
-
-use crate::io::ContourPoint;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Process both "rest" and "stress" cases.
@@ -74,6 +72,10 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
     // Ensure both contour sets have the same number of contours.
     trim_to_same_length(&mut diastole_contours, &mut systole_contours);
     trim_to_same_length(&mut diastole_catheter_contours, &mut systole_catheter_contours);
+
+    // Smooth contours.
+    diastole_contours = smooth_contours(&mut diastole_contours);
+    systole_contours = smooth_contours(&mut systole_contours);
 
     // Interpolate between diastole and systole contours.
     let steps = 30; // Number of interpolation steps
