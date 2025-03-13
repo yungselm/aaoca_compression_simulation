@@ -3,6 +3,9 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
+use std::collections::HashMap;
+
+use std::f64::consts::PI;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ContourPoint {
@@ -31,6 +34,43 @@ pub fn read_contour_data<P: AsRef<Path>>(path: P) -> Result<Vec<ContourPoint>, B
         }
     }
     Ok(points)
+}
+
+pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
+    // Map to store unique frame indices and one associated z coordinate per frame.
+    let mut frame_z: HashMap<u32, f64> = HashMap::new();
+    for point in points {
+        // Use the first encountered z-coordinate for each frame index.
+        frame_z.entry(point.frame_index).or_insert(point.z);
+    }
+
+    let mut catheter_points = Vec::new();
+    // Sort the frame indices to ensure a predictable order.
+    let mut frames: Vec<u32> = frame_z.keys().cloned().collect();
+    frames.sort();
+
+    // Parameters for the catheter circle.
+    let center_x = 4.5;
+    let center_y = 4.5;
+    let radius = 0.5;
+    let num_points = 20;
+
+    // For each unique frame, generate 10 catheter points around a circle.
+    for frame in frames {
+        let z = frame_z[&frame];
+        for i in 0..num_points {
+            let angle = 2.0 * PI * (i as f64) / (num_points as f64);
+            let x = center_x + radius * angle.cos();
+            let y = center_y + radius * angle.sin();
+            catheter_points.push(ContourPoint {
+                frame_index: frame,
+                x,
+                y,
+                z,
+            });
+        }
+    }
+    catheter_points
 }
 
 pub fn write_obj_mesh(

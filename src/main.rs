@@ -9,11 +9,13 @@ use std::io::Write;
 use std::path::Path;
 use std::error::Error;
 
-use io::{read_contour_data, write_obj_mesh};
+use io::{read_contour_data, create_catheter_points, write_obj_mesh};
 use contour::create_contours;
 use processing::{compute_centroid, translate_contour};
 use utils::trim_to_same_length;
-use texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture};
+use texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture};
+
+use crate::io::ContourPoint;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Process both "rest" and "stress" cases.
@@ -32,17 +34,25 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
     println!("--- Processing {} Diastole ---", case_name);
     let diastole_path = Path::new(input_dir).join("diastolic_contours.csv");
     let diastole_points = read_contour_data(diastole_path.to_str().unwrap())?;
+    let diastole_catheter = create_catheter_points(&diastole_points);
+
     let mut diastole_contours = create_contours(diastole_points);
+    let mut diastole_catheter_contours = create_contours(diastole_catheter);
 
     // === Process Systolic Contours ===
     println!("--- Processing {} Systole ---", case_name);
     let systole_path = Path::new(input_dir).join("systolic_contours.csv");
     let systole_points = read_contour_data(systole_path.to_str().unwrap())?;
+    let systole_catheter = create_catheter_points(&systole_points);
+
     let mut systole_contours = create_contours(systole_points);
+    let mut systole_catheter_contours = create_contours(systole_catheter);
 
     // Align systolic contours to the diastolic reference.
     let diastolic_ref_centroid = compute_centroid(&diastole_contours[0].1);
-    for (_, ref mut contour) in systole_contours.iter_mut() {
+    for (_, ref mut contour) in systole_contours
+            .iter_mut()
+            .chain(systole_catheter_contours.iter_mut()) {
         let systolic_centroid = compute_centroid(contour);
         let translation = (
             diastolic_ref_centroid.0 - systolic_centroid.0,
@@ -53,7 +63,9 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
 
     // Adjust the z-coordinates of systolic contours.
     let z_translation = diastole_contours[0].1[0].z - systole_contours[0].1[0].z;
-    for (_, ref mut contour) in systole_contours.iter_mut() {
+    for (_, ref mut contour) in systole_contours
+        .iter_mut()
+        .chain(systole_catheter_contours.iter_mut()) {
         for point in contour {
             point.z += z_translation;
         }
@@ -61,34 +73,40 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
 
     // Ensure both contour sets have the same number of contours.
     trim_to_same_length(&mut diastole_contours, &mut systole_contours);
+    trim_to_same_length(&mut diastole_catheter_contours, &mut systole_catheter_contours);
 
     // Interpolate between diastole and systole contours.
     let steps = 30; // Number of interpolation steps
     let interpolated_meshes = processing::interpolate_contours(&diastole_contours, &systole_contours, steps)?;
+    let interpolated_catheter_meshes = processing::interpolate_contours(&diastole_catheter_contours, &systole_catheter_contours, steps)?;
 
     // === Build the Meshes to Process ===
     // Include diastole, systole, and interpolated meshes.
-    let all_meshes = std::iter::once(&diastole_contours[..])
+    let all_contour_meshes = std::iter::once(&diastole_contours[..])
         .chain(std::iter::once(&systole_contours[..]))
         .chain(interpolated_meshes.iter().map(|m| &m[..]))
         .collect::<Vec<_>>();
 
+        
     // === Compute Maximum Displacement for Normalization ===
     let mut max_disp: f32 = 0.0;
-    for mesh in &all_meshes {
+    for mesh in &all_contour_meshes {
         let displacements = compute_displacements(mesh, &diastole_contours);
         println!("max_disp: {:?}", max_disp);
         max_disp = displacements.iter().fold(max_disp, |a, &b| a.max(b));
     }
 
-    // === Process Each Mesh ===
-    for (i, mesh) in all_meshes.into_iter().enumerate() {
-        // Compute UV coordinates for the current mesh.
+    let all_catheter_meshes = std::iter::once(&diastole_catheter_contours[..])
+        .chain(std::iter::once(&systole_catheter_contours[..]))
+        .chain(interpolated_catheter_meshes.iter().map(|m| &m[..]))
+        .collect::<Vec<_>>();
+
+    // --- Process Regular (Contour) Meshes ---
+    for (i, mesh) in all_contour_meshes.into_iter().enumerate() {
+        // Compute UV coordinates.
         let uv_coords = compute_uv_coordinates(mesh);
 
-        // Determine texture dimensions:
-        // - The texture height equals the number of contours.
-        // - The texture width equals the number of points per contour.
+        // Determine texture dimensions.
         let texture_height = mesh.len() as u32;
         let texture_width = if texture_height > 0 {
             mesh[0].1.len() as u32
@@ -96,7 +114,7 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
             0
         };
 
-        // Compute the displacement values.
+        // Compute displacement values.
         let displacements = compute_displacements(mesh, &diastole_contours);
 
         // Save the displacement texture.
@@ -120,7 +138,7 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
             tex_filename
         )?;
 
-        // Write the OBJ file with vertices, normals, and UV coordinates.
+        // Write the OBJ file.
         let obj_filename = format!("mesh_{:03}_{}.obj", i, case_name);
         let obj_path = Path::new(output_dir).join(&obj_filename);
         write_obj_mesh(
@@ -131,5 +149,44 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
         )?;
     }
 
-    Ok(())
+    // --- Process Catheter Meshes ---
+    for (i, mesh) in all_catheter_meshes.into_iter().enumerate() {
+        // Determine texture dimensions.
+        let texture_height = mesh.len() as u32;
+        let texture_width = if texture_height > 0 {
+            mesh[0].1.len() as u32
+        } else {
+            0
+        };
+
+        // For catheter meshes we generate a fixed (black) texture.
+        let tex_filename = format!("catheter_{:03}_{}.png", i, case_name);
+        let texture_path = Path::new(output_dir).join(&tex_filename);
+        create_black_texture(texture_width, texture_height, texture_path.to_str().unwrap())?;
+
+        // Write the material file (MTL) for catheter mesh.
+        let mtl_filename = format!("catheter_{:03}_{}.mtl", i, case_name);
+        let mtl_path = Path::new(output_dir).join(&mtl_filename);
+        let mut mtl_file = File::create(&mtl_path)?;
+        // Set both ambient and diffuse to black.
+        writeln!(
+            mtl_file,
+            "newmtl black_material\nKa 0 0 0\nKd 0 0 0\nmap_Kd {}",
+            tex_filename
+        )?;
+
+        // Compute UV coordinates (or use dummy coordinates if preferred).
+        let uv_coords = compute_uv_coordinates(mesh);
+        
+        // Write the OBJ file.
+        let obj_filename = format!("catheter_{:03}_{}.obj", i, case_name);
+        let obj_path = Path::new(output_dir).join(&obj_filename);
+        write_obj_mesh(
+            mesh,
+            &uv_coords,
+            obj_path.to_str().unwrap(),
+            &mtl_filename,
+        )?;
+    }
+Ok(())
 }

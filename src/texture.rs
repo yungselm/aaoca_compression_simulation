@@ -60,3 +60,10 @@ pub fn create_displacement_texture(
     img.save(filename)?;
     Ok(())
 }
+
+pub fn create_black_texture(width: u32, height: u32, filename: &str) -> Result<(), Box<dyn Error>> {
+    let black = Rgb([0u8, 0u8, 0u8]); // Ensure pixel values are u8
+    let img = ImageBuffer::from_pixel(width, height, black);
+    img.save(filename)?; // Save as PNG
+    Ok(())
+}

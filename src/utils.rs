@@ -1,3 +1,5 @@
+use std::{env::Vars, f64::consts::PI};
+
 /// Trims two vectors so that both have the same length.
 /// Returns the new (minimum) length.
 pub fn trim_to_same_length<T>(v1: &mut Vec<T>, v2: &mut Vec<T>) -> usize {
@@ -6,6 +8,16 @@ pub fn trim_to_same_length<T>(v1: &mut Vec<T>, v2: &mut Vec<T>) -> usize {
     v2.truncate(min_len);
     min_len
 }
+
+// pub fn moving_average_smoothing(contours: Vec<u32, Vec<_>>) -> Vec<u32, Vec<_>> {
+//     let mut smoothed_points = Vec::new();
+
+//     for i in 0..contours.len(){
+//         for j in 0..points.len(){
+
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod tests {

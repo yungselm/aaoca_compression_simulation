@@ -27,7 +27,7 @@ def import_sequence():
             use_image_search=True
         )
         
-        imported_group = bpy.context.selected_objects.copy()
+        imported_group = sorted(bpy.context.selected_objects.copy(), key=lambda obj: obj.name)
         imported_groups.append(imported_group)
         bpy.ops.object.select_all(action='DESELECT')
     return imported_groups
@@ -55,23 +55,31 @@ def setup_animation(groups):
         elif obj_idx == 31:
             frames = [32]
         else:
-            # Forward frame and reverse frame
             frames = [obj_idx + 1, 63 - obj_idx]
 
         for obj in group:
-            # Set visibility for each target frame
             for frame in frames:
-                # Make visible at target frame
+                # Set visible at current frame
                 obj.hide_viewport = False
                 obj.hide_render = False
                 obj.keyframe_insert(data_path="hide_viewport", frame=frame)
                 obj.keyframe_insert(data_path="hide_render", frame=frame)
                 
-                # Hide at next frame
-                obj.hide_viewport = True
-                obj.hide_render = True
-                obj.keyframe_insert(data_path="hide_viewport", frame=frame+1)
-                obj.keyframe_insert(data_path="hide_render", frame=frame+1)
+                # Set hidden at next frame
+                if frame < total_frames:
+                    obj.hide_viewport = True
+                    obj.hide_render = True
+                    obj.keyframe_insert(data_path="hide_viewport", frame=frame+1)
+                    obj.keyframe_insert(data_path="hide_render", frame=frame+1)
+
+    # Set constant interpolation for all keyframes
+    for group in groups:
+        for obj in group:
+            if obj.animation_data and obj.animation_data.action:
+                for fcurve in obj.animation_data.action.fcurves:
+                    if 'hide_viewport' in fcurve.data_path or 'hide_render' in fcurve.data_path:
+                        for keyframe in fcurve.keyframe_points:
+                            keyframe.interpolation = 'CONSTANT'
 
 def setup_render_settings():
     # Set render engine
