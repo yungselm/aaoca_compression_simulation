@@ -18,7 +18,7 @@ An example for rest pulsatile lumen deformation with additionally the IVUS cathe
 
 An example for stress pulsatile lumen deformation with additionally the IVUS catheter and UV-mapping to depict displacements.
 
-![Stress Pulsatile Lumen Deformation](animation_pulsatile_lumen_deformation_stress.gif)
+![Stress Pulsatile Lumen Deformation](media/animation_pulsatile_lumen_deformation_stress.gif)
 
 ## Installation and Running
 ```bash
