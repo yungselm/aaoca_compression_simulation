@@ -14,7 +14,7 @@ And with additional uv texture map, depicting the change in distance in red scal
 ![Phasic Compression UV](media/uv_map.gif) -->
 An example for rest pulsatile lumen deformation with additionally the IVUS catheter and UV-mapping to depict displacements.
 
-![Rest Pulsatile Lumen Deformation](animation_pulsatile_lumen_deformation_rest.gif)
+![Rest Pulsatile Lumen Deformation](media/animation_pulsatile_lumen_deformation_rest.gif)
 
 An example for stress pulsatile lumen deformation with additionally the IVUS catheter and UV-mapping to depict displacements.
 
