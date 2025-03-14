@@ -57,7 +57,7 @@ pub fn create_displacement_texture(
         ]);
         img.put_pixel(x, y, color);
     }
-    img.save(filename)?;
+    img.save(filename)?; // Save as PNG
     Ok(())
 }
 

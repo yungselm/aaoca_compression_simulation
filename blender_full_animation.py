@@ -18,6 +18,28 @@ def clean_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
 
+def flip_normals():
+    """Flip normals for all selected objects and print the direction of one normal before and after flipping"""
+    for obj in bpy.context.selected_objects:
+        bpy.context.view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        
+        # Get the direction of one normal before flipping
+        bpy.ops.mesh.select_all(action='SELECT')
+        bpy.ops.mesh.normals_make_consistent(inside=False)
+        bpy.ops.object.mode_set(mode='OBJECT')
+        normal_before = obj.data.polygons[0].normal.copy()
+        print(f"Normal before flipping: {normal_before}")
+        
+        # Flip normals
+        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.mesh.flip_normals()
+        bpy.ops.object.mode_set(mode='OBJECT')
+        
+        # Get the direction of one normal after flipping
+        normal_after = obj.data.polygons[0].normal.copy()
+        print(f"Normal after flipping: {normal_after}")
+
 def import_sequence():
     imported_groups = []
     for i in range(32):
@@ -30,9 +52,13 @@ def import_sequence():
             use_split_groups=True,
             use_image_search=True
         )
+        # Flip normals after import
+        flip_normals()
         imported_group = sorted(bpy.context.selected_objects.copy(), key=lambda obj: obj.name)
         imported_groups.append(imported_group)
         bpy.ops.object.select_all(action='DESELECT')
+
+    print(f"Imported {len(imported_groups)} groups")
     return imported_groups
 
 def import_catheter_sequence():
@@ -47,58 +73,49 @@ def import_catheter_sequence():
             use_split_groups=True,
             use_image_search=True
         )
+        # Flip normals after import
+        flip_normals()
         imported_group = sorted(bpy.context.selected_objects.copy(), key=lambda obj: obj.name)
         imported_catheter_groups.append(imported_group)
         bpy.ops.object.select_all(action='DESELECT')
     return imported_catheter_groups
 
-def setup_animation(groups, total_frames, frame_rate, object_end_frame):
+def setup_animation(groups, catheter_groups, total_frames, frame_rate, object_end_frame):
     scene = bpy.context.scene
-    scene.frame_start = 1
+    scene.frame_start = 0
     scene.frame_end = total_frames
     scene.render.fps = frame_rate
 
-    current_frame = 1
-
-    while current_frame < total_frames:
-        # Hide all objects at the start of the loop.
-        for group in groups:
-            for obj in group:
+    num_objects = len(groups)  # Number of mesh/catheter pairs
+    
+    for frame in range(total_frames):
+        current_index = frame % (2 * num_objects - 2)
+        if current_index >= num_objects:
+            current_index = 2 * num_objects - 2 - current_index
+        
+        # Hide all objects
+        for i, (mesh_group, catheter_group) in enumerate(zip(groups, catheter_groups)):
+            for obj in mesh_group + catheter_group:
                 obj.hide_viewport = True
                 obj.hide_render = True
-                obj.keyframe_insert(data_path="hide_viewport", frame=current_frame)
-                obj.keyframe_insert(data_path="hide_render", frame=current_frame)
-
-        # Animate visibility: each group gets visible at its designated frame.
-        for obj_idx, group in enumerate(groups):
-            start_frame = current_frame + obj_idx + 1
-            end_frame = current_frame + object_end_frame + 1 - obj_idx
-
-            for obj in group:
-                for frame in [start_frame, end_frame]:
-                    if frame < total_frames:
-                        obj.hide_viewport = False
-                        obj.hide_render = False
-                        obj.keyframe_insert(data_path="hide_viewport", frame=frame)
-                        obj.keyframe_insert(data_path="hide_render", frame=frame)
-
-                        if frame + 1 < total_frames:
-                            obj.hide_viewport = True
-                            obj.hide_render = True
-                            obj.keyframe_insert(data_path="hide_viewport", frame=frame + 1)
-                            obj.keyframe_insert(data_path="hide_render", frame=frame + 1)
-
-        # Set constant interpolation for all keyframes.
-        for group in groups:
-            for obj in group:
-                if obj.animation_data and obj.animation_data.action:
-                    for fcurve in obj.animation_data.action.fcurves:
-                        if 'hide_viewport' in fcurve.data_path or 'hide_render' in fcurve.data_path:
-                            for keyframe in fcurve.keyframe_points:
-                                keyframe.interpolation = 'CONSTANT'
-
-        # Move to the next cycle
-        current_frame += object_end_frame
+                obj.keyframe_insert(data_path="hide_viewport", frame=frame)
+                obj.keyframe_insert(data_path="hide_render", frame=frame)
+        
+        # Show only the current object pair
+        for obj in groups[current_index] + catheter_groups[current_index]:
+            obj.hide_viewport = False
+            obj.hide_render = False
+            obj.keyframe_insert(data_path="hide_viewport", frame=frame)
+            obj.keyframe_insert(data_path="hide_render", frame=frame)
+    
+    # Set constant interpolation for visibility keyframes
+    for group in groups + catheter_groups:
+        for obj in group:
+            if obj.animation_data and obj.animation_data.action:
+                for fcurve in obj.animation_data.action.fcurves:
+                    if 'hide_viewport' in fcurve.data_path or 'hide_render' in fcurve.data_path:
+                        for keyframe in fcurve.keyframe_points:
+                            keyframe.interpolation = 'CONSTANT'
 
 def setup_render_settings():
     bpy.context.scene.render.engine = 'BLENDER_EEVEE'
@@ -147,41 +164,6 @@ def setup_camera():
     
     return camera, camera_target
 
-# def animate_camera(camera, target, start_frame, z_orbit_frames, y_orbit_frames):
-#     """
-#     Animates the camera in two phases while keeping it locked onto the vessel (target):
-#     Phase 1: Horizontal orbit (around global Z-axis) lasting z_orbit_frames.
-#     Phase 2: Vertical tilt (rotate about the camera's right vector) lasting y_orbit_frames.
-#     """
-#     scene_center = target.location.copy()
-#     initial_offset = camera.location - scene_center
-
-#     # Phase 1: Rotate around Z-axis (horizontal orbit).
-#     z_start = start_frame
-#     z_end = start_frame + z_orbit_frames - 1
-#     for f in range(z_start, z_end + 1):
-#         t = (f - z_start) / (z_orbit_frames - 1)
-#         angle = 2 * math.pi * t  # Full 360° orbit.
-#         rot_z = Matrix.Rotation(angle, 4, 'Z')
-#         new_offset = rot_z @ initial_offset
-#         camera.location = scene_center + new_offset
-#         camera.keyframe_insert(data_path="location", frame=f)
-
-#     # Phase 2: Rotate around the camera's right vector to tilt vertically.
-#     # Use the offset at the end of Phase 1 as base.
-#     phase1_end_offset = camera.location - scene_center
-#     # Compute the camera's right vector from its current orientation.
-#     right_vector = camera.matrix_world.to_quaternion() @ Vector((1, 0, 0))
-#     y_start = z_end + 1
-#     y_end = y_start + y_orbit_frames - 1
-#     for f in range(y_start, y_end + 1):
-#         t = (f - y_start) / (y_orbit_frames - 1)
-#         angle = 2 * math.pi * t  # Full 360° tilt.
-#         rot = Matrix.Rotation(angle, 4, right_vector)
-#         new_offset = rot @ phase1_end_offset
-#         camera.location = scene_center + new_offset
-#         camera.keyframe_insert(data_path="location", frame=f)
-
 def animate_camera(camera, target, start_frame, z_orbit_frames, y_orbit_frames):
     """
     Animates the camera in two phases while keeping it locked onto the vessel (target):
@@ -203,28 +185,19 @@ def animate_camera(camera, target, start_frame, z_orbit_frames, y_orbit_frames):
         camera.keyframe_insert(data_path="location", frame=f)
 
     # Phase 2: Rotate around the camera's right vector to tilt vertically.
-    # Use the offset at the end of Phase 1 as base.
     phase1_end_offset = camera.location - scene_center
-    # Compute the camera's right vector from its current orientation.
     right_vector = camera.matrix_world.to_quaternion() @ Vector((1, 0, 0))
     y_start = z_end + 1
     y_end = y_start + y_orbit_frames - 1
-    
-    # We need to track the camera's current quaternion orientation and apply rotation.
     current_rotation = camera.rotation_euler.copy()
     for f in range(y_start, y_end + 1):
         t = (f - y_start) / (y_orbit_frames - 1)
         angle = 2 * math.pi * t  # Full 360° tilt.
-        
-        # Instead of directly rotating around the right vector, use quaternion-based rotation
-        quaternion_rotation = Quaternion(right_vector, angle)  # Create a quaternion for the tilt
+        quaternion_rotation = Quaternion(right_vector, angle)
         rotated_offset = quaternion_rotation @ phase1_end_offset
-        
         camera.location = scene_center + rotated_offset
-        camera.rotation_euler = current_rotation  # Ensure the rotation matches the camera's orientation
+        camera.rotation_euler = current_rotation
         camera.keyframe_insert(data_path="location", frame=f)
-
-        # Keep the rotation smooth and consistent for vertical tilt without flipping.
         current_rotation = camera.rotation_euler.copy()
 
 if __name__ == "__main__":
@@ -232,22 +205,40 @@ if __name__ == "__main__":
     groups = import_sequence()
     catheter_groups = import_catheter_sequence()
     
-    setup_animation(groups, total_frames, frame_rate, object_end_frame)
-    setup_animation(catheter_groups, total_frames, frame_rate, object_end_frame)
+    setup_animation(groups, catheter_groups, total_frames, frame_rate, object_end_frame)
     
     setup_render_settings()
     
     camera, target = setup_camera()
     
-    # Animate the camera:
-    # Original object animation: frames 1-62.
-    # Then Phase 1 (horizontal orbit) from frame 63 to 62+124 = 186.
-    # Then Phase 2 (vertical tilt) from frame 187 to 186+124 = 310.
     animate_camera(camera, target, object_end_frame + 1, z_orbit_frames, y_orbit_frames)
     
-    bpy.ops.object.light_add(type='SUN', location=(0, -2, 5), rotation=(0.785, 0, 0))
-    bpy.ops.object.light_add(type='SUN', location=(0, 2, 5), rotation=(-0.785, 0, 0))
-    
+    # Create all lights with tracking to the same target
+    def create_tracked_light(type, location):
+        bpy.ops.object.light_add(type=type, location=location)
+        light = bpy.context.object
+        # Add tracking constraint
+        constraint = light.constraints.new('TRACK_TO')
+        constraint.target = target
+        constraint.track_axis = 'TRACK_NEGATIVE_Z'
+        constraint.up_axis = 'UP_Y'
+        return light
+
+    # Create lights with automatic tracking
+    lights = [
+        create_tracked_light('SUN', (0, -2, 5)),   # Top front
+        create_tracked_light('SUN', (0, 2, 5)),    # Top back
+        create_tracked_light('SUN', (0, -2, -5)),  # Bottom front
+        create_tracked_light('SUN', (0, 2, -5)),   # Bottom back
+        create_tracked_light('SUN', (5, 0, 0)),    # Right
+        create_tracked_light('SUN', (-5, 0, 0)),   # Left
+    ]
+
+    # Configure light properties
+    for light in lights:
+        light.data.energy = 2.0  # Adjust this value as needed
+        light.data.color = (1.0, 1.0, 1.0)  # White light
+
     print("Rendering animation...")
     bpy.ops.render.render(animation=True)
     print(f"Animation saved to: {bpy.context.scene.render.filepath}")
