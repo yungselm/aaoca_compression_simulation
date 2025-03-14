@@ -19,7 +19,7 @@ def clean_scene():
     bpy.ops.object.delete()
 
 def flip_normals():
-    """Flip normals for all selected objects and print the direction of one normal before and after flipping"""
+    """Flip normals for all selected objects and print the direction of one normal before and after flipping."""
     for obj in bpy.context.selected_objects:
         bpy.context.view_layer.objects.active = obj
         bpy.ops.object.mode_set(mode='EDIT')
@@ -94,7 +94,7 @@ def setup_animation(groups, catheter_groups, total_frames, frame_rate, object_en
             current_index = 2 * num_objects - 2 - current_index
         
         # Hide all objects
-        for i, (mesh_group, catheter_group) in enumerate(zip(groups, catheter_groups)):
+        for mesh_group, catheter_group in zip(groups, catheter_groups):
             for obj in mesh_group + catheter_group:
                 obj.hide_viewport = True
                 obj.hide_render = True
@@ -200,6 +200,36 @@ def animate_camera(camera, target, start_frame, z_orbit_frames, y_orbit_frames):
         camera.keyframe_insert(data_path="location", frame=f)
         current_rotation = camera.rotation_euler.copy()
 
+def scatter_lights_around_object(center, radius, num_lights, target):
+    """
+    Scatter lights evenly around the object in a spherical pattern.
+    This version uses a golden spiral distribution for more even spacing.
+    """
+    lights = []
+    for i in range(num_lights):
+        theta = math.acos(1 - 2 * (i + 0.5) / num_lights)
+        phi = math.pi * (1 + 5**0.5) * (i + 0.5)
+        x = center.x + radius * math.sin(theta) * math.cos(phi)
+        y = center.y + radius * math.sin(theta) * math.sin(phi)
+        z = center.z + radius * math.cos(theta)
+        bpy.ops.object.light_add(type='SUN', location=(x, y, z))
+        light = bpy.context.object
+        # Add a tracking constraint so the light always points to the target
+        constraint = light.constraints.new('TRACK_TO')
+        constraint.target = target
+        constraint.track_axis = 'TRACK_NEGATIVE_Z'
+        constraint.up_axis = 'UP_Y'
+        lights.append(light)
+    return lights
+
+def get_object_geometric_center(obj):
+    # Transform each bound_box corner from local to global coordinates.
+    coords = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    # Compute min and max points.
+    min_coord = Vector((min(v[i] for v in coords) for i in range(3)))
+    max_coord = Vector((max(v[i] for v in coords) for i in range(3)))
+    return (min_coord + max_coord) / 2
+
 if __name__ == "__main__":
     clean_scene()
     groups = import_sequence()
@@ -213,32 +243,28 @@ if __name__ == "__main__":
     
     animate_camera(camera, target, object_end_frame + 1, z_orbit_frames, y_orbit_frames)
     
-    # Create all lights with tracking to the same target
-    def create_tracked_light(type, location):
-        bpy.ops.object.light_add(type=type, location=location)
-        light = bpy.context.object
-        # Add tracking constraint
-        constraint = light.constraints.new('TRACK_TO')
-        constraint.target = target
-        constraint.track_axis = 'TRACK_NEGATIVE_Z'
-        constraint.up_axis = 'UP_Y'
-        return light
+    # Find the mesh_000_rest object to determine the lighting center.
+    mesh_obj = None
+    for obj in bpy.data.objects:
+        if obj.name.startswith("mesh_000_rest"):
+            mesh_obj = obj
+            break
+    if mesh_obj:
+        mesh_center = get_object_geometric_center(mesh_obj)
+    else:
+        mesh_center = target.location
 
-    # Create lights with automatic tracking
-    lights = [
-        create_tracked_light('SUN', (0, -2, 5)),   # Top front
-        create_tracked_light('SUN', (0, 2, 5)),    # Top back
-        create_tracked_light('SUN', (0, -2, -5)),  # Bottom front
-        create_tracked_light('SUN', (0, 2, -5)),   # Bottom back
-        create_tracked_light('SUN', (5, 0, 0)),    # Right
-        create_tracked_light('SUN', (-5, 0, 0)),   # Left
-    ]
-
-    # Configure light properties
+    
+    # Scatter lights around the mesh in a spherical pattern.
+    light_radius = 10.0  # Adjust the distance as needed.
+    num_lights = 12      # Adjust the number of lights as needed.
+    lights = scatter_lights_around_object(mesh_center, light_radius, num_lights, target)
+    
+    # Configure light properties.
     for light in lights:
-        light.data.energy = 2.0  # Adjust this value as needed
+        light.data.energy = 2.0  # Adjust light intensity.
         light.data.color = (1.0, 1.0, 1.0)  # White light
-
+    
     print("Rendering animation...")
     bpy.ops.render.render(animation=True)
     print(f"Animation saved to: {bpy.context.scene.render.filepath}")
