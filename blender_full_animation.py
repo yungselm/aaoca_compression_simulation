@@ -8,9 +8,9 @@ obj_directory = "C:/WorkingData/Documents/2_Coding/Rust/aaoca_compression_simula
 # Object animation (only one mesh visible at a time) runs for frames 1 to 62.
 object_end_frame = 62
 # Increase z-axis orbit duration to twice as long as before.
-z_orbit_frames = 124
+z_orbit_frames = 248
 # Let the y-axis (vertical tilt) phase last 124 frames as well.
-y_orbit_frames = 124
+y_orbit_frames = 248
 total_frames = object_end_frame + z_orbit_frames + y_orbit_frames
 frame_rate = 64
 
@@ -167,13 +167,17 @@ def setup_camera():
 def animate_camera(camera, target, start_frame, z_orbit_frames, y_orbit_frames):
     """
     Animates the camera in two phases while keeping it locked onto the vessel (target):
+
     Phase 1: Horizontal orbit (around global Z-axis) lasting z_orbit_frames.
-    Phase 2: Vertical tilt (rotate about the camera's right vector) lasting y_orbit_frames.
+    Phase 2: Vertical tilt with custom segments:
+      - Segment 1: Tilt 89° in the current direction.
+      - Segment 2: Tilt 179° in the opposite direction.
+      - Segment 3: Hold this final position for 64 frames.
     """
     scene_center = target.location.copy()
     initial_offset = camera.location - scene_center
 
-    # Phase 1: Rotate around Z-axis (horizontal orbit).
+    # --- Phase 1: Horizontal Orbit ---
     z_start = start_frame
     z_end = start_frame + z_orbit_frames - 1
     for f in range(z_start, z_end + 1):
@@ -184,21 +188,53 @@ def animate_camera(camera, target, start_frame, z_orbit_frames, y_orbit_frames):
         camera.location = scene_center + new_offset
         camera.keyframe_insert(data_path="location", frame=f)
 
-    # Phase 2: Rotate around the camera's right vector to tilt vertically.
-    phase1_end_offset = camera.location - scene_center
+    # --- Phase 2: Vertical Tilt ---
+    # Determine how many frames to allocate to tilt motion versus hold.
+    hold_frames = 64
+    tilt_motion_frames = y_orbit_frames - hold_frames  # Total frames available for tilting.
+    
+    # Divide the tilt motion in two segments: 89° and 179°.
+    # (Using the ratio of the angles: 89 : 179)
+    segment1_frames = round(tilt_motion_frames * (89 / (89 + 179)))
+    segment2_frames = tilt_motion_frames - segment1_frames
+
+    # Calculate the right vector (axis of tilt rotation).
     right_vector = camera.matrix_world.to_quaternion() @ Vector((1, 0, 0))
-    y_start = z_end + 1
-    y_end = y_start + y_orbit_frames - 1
-    current_rotation = camera.rotation_euler.copy()
-    for f in range(y_start, y_end + 1):
-        t = (f - y_start) / (y_orbit_frames - 1)
-        angle = 2 * math.pi * t  # Full 360° tilt.
-        quaternion_rotation = Quaternion(right_vector, angle)
-        rotated_offset = quaternion_rotation @ phase1_end_offset
-        camera.location = scene_center + rotated_offset
-        camera.rotation_euler = current_rotation
+    
+    # Use the camera's position at the end of Phase 1 as the starting offset.
+    current_offset = camera.location - scene_center
+
+    # --- Segment 1: Tilt from 0° to +100° ---
+    angle1_final = math.radians(105)
+    seg1_start = z_end + 1
+    for f in range(seg1_start, seg1_start + segment1_frames):
+        t = (f - seg1_start) / (segment1_frames - 1) if segment1_frames > 1 else 1
+        angle = t * angle1_final
+        quat = Quaternion(right_vector, angle)
+        new_offset = quat @ current_offset
+        camera.location = scene_center + new_offset
         camera.keyframe_insert(data_path="location", frame=f)
-        current_rotation = camera.rotation_euler.copy()
+    
+    # Update the offset after segment 1.
+    current_offset = camera.location - scene_center
+
+    # --- Segment 2: Tilt from +89° to (89° - 179°) = -90° ---
+    angle2_final = math.radians(-160)
+    seg2_start = seg1_start + segment1_frames
+    for f in range(seg2_start, seg2_start + segment2_frames):
+        t = (f - seg2_start) / (segment2_frames - 1) if segment2_frames > 1 else 1
+        angle = t * angle2_final
+        quat = Quaternion(right_vector, angle)
+        new_offset = quat @ current_offset
+        camera.location = scene_center + new_offset
+        camera.keyframe_insert(data_path="location", frame=f)
+
+    # --- Segment 3: Hold the final position for hold_frames ---
+    hold_start = seg2_start + segment2_frames
+    final_offset = camera.location - scene_center
+    for f in range(hold_start, hold_start + hold_frames):
+        camera.location = scene_center + final_offset
+        camera.keyframe_insert(data_path="location", frame=f)
 
 def scatter_lights_around_object(center, radius, num_lights, target):
     """
