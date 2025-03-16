@@ -25,3 +25,10 @@ An example for stress pulsatile lumen deformation with additionally the IVUS cat
     cargo build
     cargo run
 ```
+This will build 32 meshes, one for diastole and one for systole properly aligned and with 30 interpolated meshes. Additionally the catheter path is reconstruced and a catheter with radius 0.5mm is created, again 32 meshes for the full cardiac cycle.
+
+## Rendering in Blender
+To render the animation, blender is needed with version $geq$ v4.0. The script has to be run inside of blender's scripting module.
+
+Currently the scene setup creates 9 light sources on a sphere with a defined radius around the diastole mesh. The camera then rotates around the z- and y-axis:
+![Blender scene setup](media/blender_scene_setup.png)
