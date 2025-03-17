@@ -1,13 +1,14 @@
 use serde::Deserialize;
 use std::error::Error;
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::fs::{File, create_dir_all};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::collections::HashMap;
 
 use std::f64::consts::PI;
+use std::io::BufRead;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ContourPoint {
     pub frame_index: u32,
     pub x: f64,
@@ -71,6 +72,34 @@ pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
         }
     }
     catheter_points
+}
+
+pub fn read_centerline_txt(path: &str) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
+    let file = File::open(path)?;
+    let mut rdr = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .delimiter(b' ')
+        .from_reader(file);
+
+    let mut points = Vec::new();
+    for (i, result) in rdr.records().enumerate() {
+        match result {
+            Ok(record) => {
+                let mut iter = record.iter();
+                let x = iter.next().unwrap().parse::<f64>()?;
+                let y = iter.next().unwrap().parse::<f64>()?;
+                let z = iter.next().unwrap().parse::<f64>()?;
+                points.push(ContourPoint {
+                    frame_index: i as u32,
+                    x,
+                    y,
+                    z,
+                });
+            }
+            Err(e) => eprintln!("Skipping invalid row: {:?}", e),
+        }
+    }
+    Ok(points)
 }
 
 pub fn write_obj_mesh(
@@ -169,4 +198,146 @@ pub fn write_obj_mesh(
 
     println!("OBJ mesh with normals written to {}", filename);
     Ok(())
+}
+
+pub fn read_obj_mesh(filename: &str) -> Result<Vec<(u32, Vec<ContourPoint>)>, Box<dyn Error>> {
+    let file = File::open(filename)?;
+    let reader = BufReader::new(file);
+
+    let mut vertices: Vec<ContourPoint> = Vec::new();
+    // This will be set based on the first face encountered.
+    let mut points_per_contour: Option<usize> = None;
+
+    // Loop over every line in the file.
+    for line_result in reader.lines() {
+        let line = line_result?;
+        let trimmed = line.trim();
+        if trimmed.starts_with("v ") {
+            // This is a vertex line. Split on whitespace.
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 4 {
+                let x = parts[1].parse::<f64>()?;
+                let y = parts[2].parse::<f64>()?;
+                let z = parts[3].parse::<f64>()?;
+                // We temporarily set frame_index to 0.
+                vertices.push(ContourPoint { frame_index: 0, x, y, z });
+            }
+        } else if trimmed.starts_with("f ") && points_per_contour.is_none() {
+            // Use the first face line to deduce the number of vertices per contour.
+            // A face line written by write_obj_mesh has the form:
+            // f {v1}/{v1}/{v1} {v2}/{v2}/{v2} {v3}/{v3}/{v3}
+            // where v1 comes from the first contour and v3 from the next.
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 4 {
+                // Extract the first vertex index from parts[1] and parts[3].
+                let v1_str = parts[1].split('/').next().unwrap();
+                let v3_str = parts[3].split('/').next().unwrap();
+                let v1: usize = v1_str.parse()?;
+                let v3: usize = v3_str.parse()?;
+                if v3 > v1 {
+                    points_per_contour = Some(v3 - v1);
+                }
+            }
+        }
+        // Other lines (vt, vn, mtllib, usemtl, etc.) are ignored.
+    }
+
+    // If no face line was found, assume all vertices form one single contour.
+    let points_per_contour = points_per_contour.unwrap_or(vertices.len());
+
+    // Ensure the total number of vertices divides evenly into contours.
+    if vertices.len() % points_per_contour != 0 {
+        return Err(format!(
+            "Vertex count {} is not divisible by points per contour {}.",
+            vertices.len(),
+            points_per_contour
+        ).into());
+    }
+
+    let num_contours = vertices.len() / points_per_contour;
+    let mut contours: Vec<(u32, Vec<ContourPoint>)> = Vec::with_capacity(num_contours);
+
+    for i in 0..num_contours {
+        let start = i * points_per_contour;
+        let end = start + points_per_contour;
+        let mut contour = vertices[start..end].to_vec();
+        // Set the contour's frame_index to the contour index.
+        for point in &mut contour {
+            point.frame_index = i as u32;
+        }
+        contours.push((i as u32, contour));
+    }
+
+    Ok(contours)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::f64::EPSILON;
+
+    // If you don't already have a compute_centroid function in your crate,
+    // uncomment the following dummy version for testing purposes.
+    #[allow(dead_code)]
+    fn compute_centroid(contour: &[ContourPoint]) -> (f64, f64, f64) {
+        let (sum_x, sum_y, sum_z) = contour.iter().fold((0.0, 0.0, 0.0), |(sx, sy, sz), p| {
+            (sx + p.x, sy + p.y, sz + p.z)
+        });
+        let n = contour.len() as f64;
+        (sum_x / n, sum_y / n, sum_z / n)
+    }
+
+    #[test]
+    fn test_read_write_obj_mesh() {
+        // Create sample contours: two contours, each with 2 vertices.
+        let input_contours = vec![
+            (0, vec![
+                ContourPoint { frame_index: 0, x: 0.0, y: 0.0, z: 0.0 },
+                ContourPoint { frame_index: 0, x: 1.0, y: 0.0, z: 0.0 },
+            ]),
+            (1, vec![
+                ContourPoint { frame_index: 1, x: 0.0, y: 0.0, z: 1.0 },
+                ContourPoint { frame_index: 1, x: 1.0, y: 0.0, z: 1.0 },
+            ]),
+        ];
+        
+        // Total vertices: 2 contours × 2 points = 4.
+        // Provide a UV coordinate for each vertex.
+        let total_vertices: usize = input_contours.iter().map(|(_, pts)| pts.len()).sum();
+        let uv_coords = vec![(0.0_f32, 0.0_f32); total_vertices];
+        
+        // Define temporary filenames.
+        let obj_filename = "test_roundtrip.obj";
+        let mtl_filename = "test_roundtrip.mtl";
+
+        // Write the OBJ mesh.
+        write_obj_mesh(&input_contours, &uv_coords, obj_filename, mtl_filename)
+            .expect("Failed to write OBJ mesh");
+        
+        // Read the mesh back.
+        let output_contours = read_obj_mesh(obj_filename)
+            .expect("Failed to read OBJ mesh");
+        
+        println!("Input {:?}", input_contours);
+        println!("Output {:?}", output_contours);
+
+        // Check that the number of contours is the same.
+        assert_eq!(input_contours.len(), output_contours.len());
+        
+        // Verify that each contour has the expected number of points and matching vertex values.
+        for (i, (frame_idx, contour)) in output_contours.iter().enumerate() {
+            assert_eq!(contour.len(), input_contours[i].1.len());
+            for (p_written, p_read) in input_contours[i].1.iter().zip(contour.iter()) {
+                assert!((p_written.x - p_read.x).abs() < EPSILON);
+                assert!((p_written.y - p_read.y).abs() < EPSILON);
+                assert!((p_written.z - p_read.z).abs() < EPSILON);
+            }
+            // Confirm that the new frame indices are sequential starting at 0.
+            assert_eq!(*frame_idx, i as u32);
+        }
+        
+        // Clean up temporary files.
+        fs::remove_file(obj_filename).unwrap();
+    }
 }

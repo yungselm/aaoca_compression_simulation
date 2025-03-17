@@ -3,6 +3,8 @@ mod contour;
 mod processing;
 mod utils;
 mod texture;
+mod comparison;
+mod centerline_alignment;
 
 use std::fs::File;
 use std::io::Write;
@@ -14,12 +16,34 @@ use contour::create_contours;
 use processing::{compute_centroid, translate_contour};
 use utils::{trim_to_same_length, smooth_contours};
 use texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture};
+use comparison::process_phase_comparison;
+use centerline_alignment::test_function;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Process both "rest" and "stress" cases.
-    process_case("rest", "input/rest_csv_files", "output/rest")?;
-    process_case("stress", "input/stress_csv_files", "output/stress")?;
+    test_function()?;
     Ok(())
+    // process_case("rest", "input/rest_csv_files", "output/rest")?;
+    // process_case("stress", "input/stress_csv_files", "output/stress")?;
+    // process_phase_comparison(
+    //     "diastolic",
+    //     "input/rest_csv_files",
+    //     "input/stress_csv_files",
+    //     "output/diastole_comparison"
+    // )?;
+
+    // process_phase_comparison(
+    //     "systolic",
+    //     "input/rest_csv_files",
+    //     "input/stress_csv_files",
+    //     "output/systole_comparison"
+    // )?;
+    // // align_meshes_to_centerline(
+    // //     "resampled_centerline.txt",
+    // //     "output/stress",
+    // //     "output/aligned_stress"
+    // // )?;
+    // Ok(())
 }
 
 /// Processes a given case by reading diastolic and systolic contours, aligning them,
@@ -97,9 +121,6 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
             if i == 1 || i == 2 { None } else { Some(mesh) }
         })
         .collect();
-
-
-
         
     // === Compute Maximum Displacement for Normalization ===
     let mut max_disp: f32 = 0.0;
@@ -121,7 +142,7 @@ fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<()
         .filter_map(|(i, mesh)| {
             if i == 1 || i == 2 { None } else { Some(mesh) }
         })
-        .collect();    
+        .collect();
 
     // --- Process Regular (Contour) Meshes ---
     for (i, mesh) in all_contour_meshes.into_iter().enumerate() {
