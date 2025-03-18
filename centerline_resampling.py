@@ -4,7 +4,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 # Configuration
 filename = "test_cl.txt"  # Update with your filename
-target_distance = 0.40439
+target_distance = 0.97597
 obj_filename = "test.obj"  # Update with your OBJ filename
 
 # Read and parse centerline data
@@ -37,8 +37,11 @@ if not points:
 
 points = np.array(points)
 
+# reverse the points
+points = points[::-1]
+
 # remove last 15 points
-points = points[:-12]
+points = points[:-3]
 
 # reverse the points
 points = points[::-1]
