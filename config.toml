@@ -1,0 +1,9 @@
+[general]
+data_dir = "input"
+output_dir = "output"
+
+[processing]
+run_process_case = true
+run_phase_comparison = true
+run_centerline_alignment = false  # Set to true if you want to run this
+cases = ["rest", "stress"]  # Cases to process (can be expanded)

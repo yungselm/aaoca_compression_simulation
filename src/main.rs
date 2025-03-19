@@ -5,6 +5,7 @@ mod utils;
 mod texture;
 mod comparison;
 mod centerline_alignment;
+mod config;
 
 use std::fs::File;
 use std::io::Write;
@@ -17,12 +18,11 @@ use processing::{compute_centroid, translate_contour};
 use utils::{trim_to_same_length, smooth_contours};
 use texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture};
 use comparison::process_phase_comparison;
-use centerline_alignment::test_function;
+use centerline_alignment::create_centerline_aligned_meshes;
+use config::load_config;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Process both "rest" and "stress" cases.
-    test_function()?;
-    Ok(())
+    // // Process both "rest" and "stress" cases.
     // process_case("rest", "input/rest_csv_files", "output/rest")?;
     // process_case("stress", "input/stress_csv_files", "output/stress")?;
     // process_phase_comparison(
@@ -38,12 +38,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     //     "input/stress_csv_files",
     //     "output/systole_comparison"
     // )?;
-    // // align_meshes_to_centerline(
-    // //     "resampled_centerline.txt",
-    // //     "output/stress",
-    // //     "output/aligned_stress"
-    // // )?;
-    // Ok(())
+    // Create centerline-aligned meshes.
+    create_centerline_aligned_meshes(
+        "rest",
+        "resampled_centerline.txt",
+        "output/rest",
+        "output/aligned_rest"
+    )?;
+
+    create_centerline_aligned_meshes(
+        "stress",
+        "resampled_centerline_stress.txt",
+        "output/stress",
+        "output/aligned_stress"
+    )?;
+    Ok(())
 }
 
 /// Processes a given case by reading diastolic and systolic contours, aligning them,

@@ -7,3 +7,6 @@ edition = "2021"
 csv = "1.1"
 serde = { version = "1.0", features = ["derive"]}
 image = "*"
+rand = "0.8.5"
+nalgebra = "*"
+toml = "0.5.6"

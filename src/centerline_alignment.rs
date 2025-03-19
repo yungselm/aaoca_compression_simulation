@@ -5,7 +5,8 @@ use std::path::Path;
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
 use crate::io::{read_centerline_txt, read_obj_mesh, write_obj_mesh, ContourPoint};
  
-const FIXED_ROTATION_DEG: f64 = 235.0;
+// const FIXED_ROTATION_DEG: f64 = 235.0;
+const FIXED_ROTATION_DEG: f64 = 220.0;
 
 /// Applies a fixed rotation around the z-axis to preserve the initial in-plane orientation.
 fn rotate_contours_around_z(mesh: &mut Vec<(u32, Vec<ContourPoint>)>, degrees: f64) {
@@ -37,7 +38,6 @@ impl ContourFrame {
     /// Creates a new ContourFrame from raw contour points, calculating the centroid and normal.
     pub fn from_contour(frame_index: u32, points: Vec<ContourPoint>) -> Self {
         assert!(!points.is_empty(), "Cannot create ContourFrame from empty points");
-        assert!(points.len() >= 500, "Contour should contain at least 500 points");
 
         let centroid_3d = Self::calculate_centroid(&points);
         let normal = Self::calculate_normal(&points, &centroid_3d);
@@ -81,20 +81,22 @@ impl ContourFrame {
     }
 }
 
-/// Aligns a single ContourFrame with the corresponding centerline point.
-/// 
-/// It first translates the frame’s centroid to the centerline point and then rotates the frame
-/// so that its normal aligns with the centerline’s normal. The rotation is applied around the
-/// centerline point as the pivot.
-fn align_frame(frame: &mut ContourFrame, cl_point: &CenterlinePoint) {
-    // === Step 1: Translation ===
-    // Calculate translation vector to move frame centroid to the centerline point.
+pub struct FrameTransformation {
+    pub frame_index: u32,
+    pub translation: Vector3<f64>,
+    pub rotation: Rotation3<f64>,
+    pub pivot: Point3<f64>,
+}
+
+/// Modified align_frame returns the transformation applied.
+fn align_frame(frame: &mut ContourFrame, cl_point: &CenterlinePoint) -> FrameTransformation {
+    // === Translation Step ===
+    // Compute the translation vector to bring the frame's centroid to the centerline point.
     let translation_vec = Vector3::new(
         cl_point.contour_point.x - frame.centroid_3d.x,
         cl_point.contour_point.y - frame.centroid_3d.y,
         cl_point.contour_point.z - frame.centroid_3d.z,
     );
-    // Apply translation to every point in the frame.
     for point in frame.points.iter_mut() {
         point.x += translation_vec.x;
         point.y += translation_vec.y;
@@ -110,65 +112,70 @@ fn align_frame(frame: &mut ContourFrame, cl_point: &CenterlinePoint) {
         cl_point.contour_point.z,
     );
 
-    // === Step 2: Rotation ===
-    // Compute the minimal rotation that aligns the frame's normal with the centerline normal.
+    // === Rotation Step ===
+    // Compute the rotation needed to align the frame's normal with the centerline normal.
     let current_normal = frame.normal;
     let desired_normal = cl_point.normal;
     let angle = current_normal.angle(&desired_normal);
-    // If the angle is negligible, skip the rotation.
-    if angle.abs() < 1e-6 {
-        return;
-    }
-    // Compute the rotation axis (cross product of current and desired normals).
-    let rotation_axis = current_normal.cross(&desired_normal);
-    if rotation_axis.norm() < 1e-6 {
-        return; // Avoid unstable rotation if axis is nearly zero.
-    }
-    let rotation_axis_unit = Unit::new_normalize(rotation_axis);
-    let rotation = Rotation3::from_axis_angle(&rotation_axis_unit, angle);
+    let rotation: Rotation3<f64> = if angle.abs() < 1e-6 {
+        Rotation3::identity()
+    } else {
+        let rotation_axis = current_normal.cross(&desired_normal);
+        if rotation_axis.norm() < 1e-6 {
+            Rotation3::identity()
+        } else {
+            let rotation_axis_unit = Unit::new_normalize(rotation_axis);
+            Rotation3::from_axis_angle(&rotation_axis_unit, angle)
+        }
+    };
 
-    // Define the pivot point for rotation as the centerline point.
+    // Define the pivot as the centerline point.
     let pivot = Point3::new(
         cl_point.contour_point.x,
         cl_point.contour_point.y,
         cl_point.contour_point.z,
     );
-    // Rotate every point in the frame around the pivot.
-    for point in frame.points.iter_mut() {
-        let current_point = Point3::new(point.x, point.y, point.z);
-        // Subtract the pivot point to get a relative vector.
-        let relative_vector = current_point - pivot;
-        let rotated_relative = rotation * relative_vector;
-        // Add the rotated vector to the pivot to get the new point.
-        let rotated_point = pivot + rotated_relative;
-        point.x = rotated_point.x;
-        point.y = rotated_point.y;
-        point.z = rotated_point.z;
+    // Apply rotation to every point if needed.
+    if angle.abs() >= 1e-6 {
+        for point in frame.points.iter_mut() {
+            let current_point = Point3::new(point.x, point.y, point.z);
+            let relative_vector = current_point - pivot;
+            let rotated_relative = rotation * relative_vector;
+            let rotated_point = pivot + rotated_relative;
+            point.x = rotated_point.x;
+            point.y = rotated_point.y;
+            point.z = rotated_point.z;
+        }
+        // Also update the frame's normal.
+        frame.normal = rotation * frame.normal;
     }
-    // Update the frame's normal.
-    frame.normal = rotation * frame.normal;
+
+    // Return the transformation details for later use.
+    FrameTransformation {
+        frame_index: frame.frame_index,
+        translation: translation_vec,
+        rotation,
+        pivot,
+    }
 }
 
-/// Processes raw mesh data into aligned ContourFrames.
-///
-/// For each frame in the mesh, the corresponding centerline point is used to translate and rotate
-/// the frame so that its centroid matches the centerline and its plane is aligned (normal-aligned)
-/// with the centerline.
+/// Updated function that processes mesh frames and collects transformations.
 pub fn process_mesh_frames(
     mesh: Vec<(u32, Vec<ContourPoint>)>,
     centerline: &Centerline,
-) -> Vec<ContourFrame> {
-    mesh.into_iter()
-        .map(|(frame_idx, points)| {
-            let mut frame = ContourFrame::from_contour(frame_idx, points);
-            
-            if let Some(cl_point) = centerline.get_by_frame(frame_idx) {
-                align_frame(&mut frame, cl_point);
-            }
-            
-            frame
-        })
-        .collect()
+) -> (Vec<ContourFrame>, Vec<FrameTransformation>) {
+    let mut aligned_frames = Vec::new();
+    let mut transformations = Vec::new();
+
+    for (frame_idx, points) in mesh.into_iter() {
+        let mut frame = ContourFrame::from_contour(frame_idx, points);
+        if let Some(cl_point) = centerline.get_by_frame(frame_idx) {
+            let transformation = align_frame(&mut frame, cl_point);
+            transformations.push(transformation);
+        }
+        aligned_frames.push(frame);
+    }
+    (aligned_frames, transformations)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -216,50 +223,6 @@ impl Centerline {
         self.points.iter().find(|p| p.contour_point.frame_index == frame_index)
     }
 }
-
-// pub fn test_function() -> Result<(), Box<dyn Error>> {
-//     let raw_centerline = read_centerline_txt("resampled_centerline.txt")?;
-//     let mut mesh = read_obj_mesh("output/stress/mesh_000_stress.obj")?;
-
-//     // Apply the fixed z-axis rotation to preserve in-plane orientations.
-//     rotate_contours_around_z(&mut mesh, FIXED_ROTATION_DEG);
-    
-//     // Build the centerline from the raw contour points.
-//     let centerline = Centerline::from_contour_points(raw_centerline);
-//     // Process and align the frames.
-//     let frames = process_mesh_frames(mesh, &centerline);
-
-//     // === Verification for the first frame ===
-//     if let (Some(frame), Some(cl_point)) = (
-//         frames.first(),
-//         centerline.get_by_frame(0) // Assuming frame indices start at 0
-//     ) {
-//         println!("=== Alignment Verification ===");
-//         println!("Centroid Position: ({:.4}, {:.4}, {:.4})", 
-//             frame.centroid_3d.x,
-//             frame.centroid_3d.y,
-//             frame.centroid_3d.z
-//         );
-//         println!("Centerline Position: ({:.4}, {:.4}, {:.4})",
-//             cl_point.contour_point.x,
-//             cl_point.contour_point.y,
-//             cl_point.contour_point.z
-//         );
-//         println!("Contour Normal: [{:.4}, {:.4}, {:.4}]",
-//             frame.normal.x,
-//             frame.normal.y,
-//             frame.normal.z
-//         );
-//         println!("Centerline Normal: [{:.4}, {:.4}, {:.4}]",
-//             cl_point.normal.x,
-//             cl_point.normal.y,
-//             cl_point.normal.z
-//         );
-//         let angle = frame.normal.angle(&cl_point.normal).to_degrees();
-//         println!("Normal Alignment Angle: {:.2}°", angle);
-//     }
-//     Ok(())
-// }
 
 /// Generates new face connectivity and UV coordinates from aligned frames.
 /// Assumes every frame has the same number of points.
@@ -341,57 +304,160 @@ fn write_updated_obj_mesh(
     Ok(())
 }
 
-/// Updated test_function in centerline_alignment.rs.
-pub fn test_function() -> Result<(), Box<dyn Error>> {
-    // Read original centerline and mesh.
-    let raw_centerline = read_centerline_txt("resampled_centerline.txt")?;
-    let mut mesh = read_obj_mesh("output/rest/mesh_000_rest.obj")?;
-    
-    // Apply the fixed z-axis rotation.
-    rotate_contours_around_z(&mut mesh, FIXED_ROTATION_DEG);
-    
-    // Build the centerline and process the mesh frames.
+pub fn create_centerline_aligned_meshes(
+    state: &str,
+    centerline_path: &str,
+    input_dir: &str,
+    output_dir: &str,
+) -> Result<(), Box<dyn Error>> {
+    // ----- Build the common centerline -----
+    let raw_centerline = read_centerline_txt(centerline_path)?;
     let centerline = Centerline::from_contour_points(raw_centerline);
-    let aligned_frames = process_mesh_frames(mesh, &centerline); // aligned_frames: Vec<ContourFrame>
-    
-    // Generate new face connectivity and new UV coordinates.
+
+    // ----- Process the reference mesh: mesh_000_rest.obj -----
+    let ref_mesh_path = format!("{}/mesh_000_{}.obj", input_dir, state);
+    let mut reference_mesh = read_obj_mesh(&ref_mesh_path)?;
+    rotate_contours_around_z(&mut reference_mesh, FIXED_ROTATION_DEG);
+    // Compute aligned frames and capture transformation parameters.
+    let (aligned_frames, transformations) = process_mesh_frames(reference_mesh, &centerline);
+
+    // Generate new connectivity and UVs for the reference mesh.
     let (new_faces, new_uvs) = generate_faces_and_uv(&aligned_frames);
-    
-    // Create new vertex list from the aligned frames.
-    let new_vertices: Vec<(f32, f32, f32)> = aligned_frames.iter()
-        .flat_map(|frame| {
-            frame.points.iter().map(|pt| (pt.x as f32, pt.y as f32, pt.z as f32))
-        })
+    let new_vertices: Vec<(f32, f32, f32)> = aligned_frames
+        .iter()
+        .flat_map(|frame| frame.points.iter().map(|pt| (pt.x as f32, pt.y as f32, pt.z as f32)))
         .collect();
-    
-    // For normals, repeat each frame's normal for each vertex in that frame.
-    let new_normals: Vec<(f32, f32, f32)> = aligned_frames.iter()
+    let new_normals: Vec<(f32, f32, f32)> = aligned_frames
+        .iter()
         .flat_map(|frame| {
             let n = frame.points.len();
-            std::iter::repeat((frame.normal.x as f32, frame.normal.y as f32, frame.normal.z as f32))
-                .take(n)
+            std::iter::repeat((
+                frame.normal.x as f32,
+                frame.normal.y as f32,
+                frame.normal.z as f32,
+            ))
+            .take(n)
         })
         .collect();
-    
-    // Optionally, copy the original .mtl and texture (.png) to a new directory.
-    std::fs::create_dir_all("output/aligned")?;
-    std::fs::copy("output/rest/mesh_000_rest.mtl", "output/aligned/mesh_000_rest.mtl")?;
-    std::fs::copy("output/rest/mesh_000_rest.png", "output/aligned/mesh_000_rest.png")?;
-    
-    // Write the updated OBJ file.
+
+    // Ensure output directory exists.
+    std::fs::create_dir_all(output_dir)?;
+    let ref_mtl_src = format!("{}/mesh_000_{}.mtl", input_dir, state);
+    let ref_png_src = format!("{}/mesh_000_{}.png", input_dir, state);
+    let ref_mtl_dest = format!("{}/mesh_000_{}.mtl", output_dir, state);
+    let ref_png_dest = format!("{}/mesh_000_{}.png", output_dir, state);
+    std::fs::copy(ref_mtl_src, ref_mtl_dest)?;
+    std::fs::copy(ref_png_src, ref_png_dest)?;
+
+    let ref_obj_dest = format!("{}/mesh_000_{}.obj", output_dir, state);
+    let ref_mtl_dest = format!("mesh_000_{}.mtl", state);
     write_updated_obj_mesh(
-        "output/aligned/mesh_000_rest.obj",
-        "mesh_000_rest.mtl",
+        &ref_obj_dest,
+        &ref_mtl_dest,
         &new_vertices,
         &new_uvs,
         &new_normals,
-        &new_faces
+        &new_faces,
     )?;
-    
-    // (Optional) Print verification info.
-    if let Some(first_vertex) = new_vertices.first() {
-        println!("Updated first vertex: ({}, {}, {})", first_vertex.0, first_vertex.1, first_vertex.2);
+    println!(
+        "Reference mesh (mesh_000_{}.obj) processed and transformation parameters stored.", state
+    );
+
+    // ----- Process subsequent meshes using stored transformation parameters -----
+    // Loop over prefixes "mesh" and "catheter" for indices 1 to 31.
+    for prefix in ["mesh", "catheter"].iter() {
+        let start_index = if *prefix == "mesh" { 1 } else { 0 };
+        for i in start_index..=31 {
+            let obj_filename = format!("{}/{}_{:03}_{}.obj", input_dir, prefix, i, state);
+            let mut mesh = read_obj_mesh(&obj_filename)?;
+            rotate_contours_around_z(&mut mesh, FIXED_ROTATION_DEG);
+
+            // Apply transformation for each frame in the mesh.
+            for (frame_index, contours) in mesh.iter_mut() {
+                if let Some(transformation) =
+                    transformations.iter().find(|t| t.frame_index == *frame_index)
+                {
+                    for point in contours.iter_mut() {
+                        // Translation.
+                        point.x += transformation.translation.x;
+                        point.y += transformation.translation.y;
+                        point.z += transformation.translation.z;
+                        // Rotation about stored pivot.
+                        let current_point = Point3::new(point.x, point.y, point.z);
+                        let relative_vector = current_point - transformation.pivot;
+                        let rotated_relative = transformation.rotation * relative_vector;
+                        let rotated_point = transformation.pivot + rotated_relative;
+                        point.x = rotated_point.x;
+                        point.y = rotated_point.y;
+                        point.z = rotated_point.z;
+                    }
+                } else {
+                    println!("Warning: No transformation found for frame index {}", frame_index);
+                }
+            }
+
+            // Rebuild vertex list.
+            let new_vertices: Vec<(f32, f32, f32)> = mesh
+                .iter()
+                .flat_map(|(_frame_index, contours)| {
+                    contours.iter().map(|pt| (pt.x as f32, pt.y as f32, pt.z as f32))
+                })
+                .collect();
+            let num_frames = mesh.len();
+            let points_per_frame = if num_frames > 0 { mesh[0].1.len() } else { 0 };
+
+            // Generate new UV coordinates.
+            let mut new_uvs = Vec::with_capacity(num_frames * points_per_frame);
+            for i in 0..num_frames {
+                let v = (i as f32 + 0.5) / num_frames as f32;
+                for j in 0..points_per_frame {
+                    let u = (j as f32 + 0.5) / points_per_frame as f32;
+                    new_uvs.push((u, v));
+                }
+            }
+
+            // Generate new face connectivity.
+            let mut new_faces = Vec::new();
+            for i in 0..(num_frames - 1) {
+                let base1 = i * points_per_frame;
+                let base2 = (i + 1) * points_per_frame;
+                for j in 0..points_per_frame {
+                    let j_next = (j + 1) % points_per_frame;
+                    new_faces.push((base1 + j, base1 + j_next, base2 + j));
+                    new_faces.push((base2 + j, base1 + j_next, base2 + j_next));
+                }
+            }
+
+            // For normals we assume a default (or compute per-frame normals if available).
+            // Here we simply assign (0.0, 0.0, 1.0) to every vertex.
+            let new_normals: Vec<(f32, f32, f32)> = (0..(num_frames * points_per_frame))
+                .map(|_| (0.0, 0.0, 1.0))
+                .collect();
+
+            // Copy corresponding .mtl and texture files.
+            let mtl_src = format!("{}/{}_{:03}_{}.mtl", input_dir, prefix, i, state);
+            let texture_src = format!("{}/{}_{:03}_{}.png", input_dir, prefix, i, state);
+            let mtl_dest = format!("{}/{}_{:03}_{}.mtl", output_dir, prefix, i, state);
+            let texture_dest = format!("{}/{}_{:03}_{}.png", output_dir, prefix, i, state);
+            std::fs::copy(mtl_src, mtl_dest)?;
+            std::fs::copy(texture_src, texture_dest)?;
+
+            // Write the updated OBJ file.
+            let obj_dest = format!("{}/{}_{:03}_{}.obj", output_dir, prefix, i, state);
+            let mtl_basename = format!("{}_{:03}_{}.mtl", prefix, i, state);
+            write_updated_obj_mesh(
+                &obj_dest,
+                &mtl_basename,
+                &new_vertices,
+                &new_uvs,
+                &new_normals,
+                &new_faces,
+            )?;
+            println!(
+                "OBJ {}_{:03}_{}.obj processed using stored transformation parameters.",
+                prefix, i, state
+            );
+        }
     }
-    
     Ok(())
 }
