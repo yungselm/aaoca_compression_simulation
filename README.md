@@ -32,3 +32,7 @@ To render the animation, blender is needed with version $geq$ v4.0. The script h
 
 Currently the scene setup creates 9 light sources on a sphere with a defined radius around the diastole mesh. The camera then rotates around the z- and y-axis:
 ![Blender scene setup](media/blender_scene_setup.png)
+
+## aligning with a CCTA-derived centerline
+The deformed meshes can additionally be positioned and aligned on a CCTA-derived centerline. The rotation around the the centerline to match anatomical position currently has to be performed by manually specifying a rotation.
+![CCTA centerline aligned mesh](media/systole_side.png)
