@@ -2,7 +2,7 @@
 use crate::{
     io::{read_contour_data, create_catheter_points, write_obj_mesh},
     contour::create_contours,
-    processing::{self, compute_centroid, translate_contour, interpolate_contours},
+    processing::{compute_centroid, translate_contour, interpolate_contours},
     utils::{trim_to_same_length, smooth_contours},
     texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture},
 };

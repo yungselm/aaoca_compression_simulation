@@ -1,9 +1,8 @@
 use std::error::Error;
-use std::fs::{File, create_dir_all, copy};
+use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::Path;
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
-use crate::io::{read_centerline_txt, read_obj_mesh, write_obj_mesh, ContourPoint};
+use crate::io::{read_centerline_txt, read_obj_mesh, ContourPoint};
  
 // const FIXED_ROTATION_DEG: f64 = 235.0;
 const FIXED_ROTATION_DEG: f64 = 220.0;

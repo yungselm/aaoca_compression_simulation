@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::error::Error;
-use std::fs::{File, create_dir_all};
+use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::collections::HashMap;

@@ -1,9 +1,16 @@
 [general]
-data_dir = "input"
-output_dir = "output"
+rest_input_path = "input/rest_csv_files"
+stress_input_path = "input/stress_csv_files"
+rest_output_path = "output/rest"
+stress_output_path = "output/stress"
+diastole_comparison_path = "output/diastole_comparison"
+systole_comparison_path = "output/systole_comparison"
+aligned_rest_path = "output/aligned_rest"
+aligned_stress_path = "output/aligned_stress"
 
 [processing]
 run_process_case = true
 run_phase_comparison = true
-run_centerline_alignment = false  # Set to true if you want to run this
-cases = ["rest", "stress"]  # Cases to process (can be expanded)
+run_centerline_alignment = true
+
+[centerline_alignment]
