@@ -2,10 +2,10 @@ use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
-use crate::io::{read_centerline_txt, read_obj_mesh, ContourPoint};
+use crate::io::{read_centerline_txt, read_obj_mesh, write_updated_obj_mesh, ContourPoint};
  
 // const FIXED_ROTATION_DEG: f64 = 235.0;
-const FIXED_ROTATION_DEG: f64 = 220.0;
+const FIXED_ROTATION_DEG: f64 = 220.0; // needs to be replaced with function that finds automatically.
 
 /// Applies a fixed rotation around the z-axis to preserve the initial in-plane orientation.
 fn rotate_contours_around_z(mesh: &mut Vec<(u32, Vec<ContourPoint>)>, degrees: f64) {
@@ -256,51 +256,6 @@ fn generate_faces_and_uv(
         }
     }
     (faces, uv_coords)
-}
-
-/// Writes a new OBJ file with updated vertices, normals, UVs, and faces.
-fn write_updated_obj_mesh(
-    filename: &str,
-    mtl_filename: &str,
-    vertices: &[(f32, f32, f32)],
-    uv_coords: &[(f32, f32)],
-    normals: &[(f32, f32, f32)],
-    faces: &[(usize, usize, usize)]
-) -> Result<(), Box<dyn Error>> {
-    let file = File::create(filename)?;
-    let mut writer = BufWriter::new(file);
-
-    // Write material reference.
-    writeln!(writer, "mtllib {}", mtl_filename)?;
-    writeln!(writer, "usemtl displacement_material")?;
-
-    // Write vertices.
-    for &(x, y, z) in vertices {
-        writeln!(writer, "v {} {} {}", x, y, z)?;
-    }
-
-    // Write UV coordinates.
-    for &(u, v) in uv_coords {
-        writeln!(writer, "vt {} {}", u, v)?;
-    }
-
-    // Write normals.
-    for &(nx, ny, nz) in normals {
-        writeln!(writer, "vn {} {} {}", nx, ny, nz)?;
-    }
-
-    // Write faces (OBJ indices start at 1).
-    for &(v1, v2, v3) in faces {
-        writeln!(
-            writer,
-            "f {}/{}/{} {}/{}/{} {}/{}/{}",
-            v1 + 1, v1 + 1, v1 + 1,
-            v2 + 1, v2 + 1, v2 + 1,
-            v3 + 1, v3 + 1, v3 + 1
-        )?;
-    }
-    println!("Updated OBJ mesh written to {}", filename);
-    Ok(())
 }
 
 pub fn create_centerline_aligned_meshes(

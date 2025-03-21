@@ -200,6 +200,52 @@ pub fn write_obj_mesh(
     Ok(())
 }
 
+/// Writes a new OBJ file with updated vertices, normals, UVs, and faces.
+/// This function is used in centerline_alignment.rs to write mesh fitted to CCTA centerline.
+pub fn write_updated_obj_mesh(
+    filename: &str,
+    mtl_filename: &str,
+    vertices: &[(f32, f32, f32)],
+    uv_coords: &[(f32, f32)],
+    normals: &[(f32, f32, f32)],
+    faces: &[(usize, usize, usize)]
+) -> Result<(), Box<dyn Error>> {
+    let file = File::create(filename)?;
+    let mut writer = BufWriter::new(file);
+
+    // Write material reference.
+    writeln!(writer, "mtllib {}", mtl_filename)?;
+    writeln!(writer, "usemtl displacement_material")?;
+
+    // Write vertices.
+    for &(x, y, z) in vertices {
+        writeln!(writer, "v {} {} {}", x, y, z)?;
+    }
+
+    // Write UV coordinates.
+    for &(u, v) in uv_coords {
+        writeln!(writer, "vt {} {}", u, v)?;
+    }
+
+    // Write normals.
+    for &(nx, ny, nz) in normals {
+        writeln!(writer, "vn {} {} {}", nx, ny, nz)?;
+    }
+
+    // Write faces (OBJ indices start at 1).
+    for &(v1, v2, v3) in faces {
+        writeln!(
+            writer,
+            "f {}/{}/{} {}/{}/{} {}/{}/{}",
+            v1 + 1, v1 + 1, v1 + 1,
+            v2 + 1, v2 + 1, v2 + 1,
+            v3 + 1, v3 + 1, v3 + 1
+        )?;
+    }
+    println!("Updated OBJ mesh written to {}", filename);
+    Ok(())
+}
+
 pub fn read_obj_mesh(filename: &str) -> Result<Vec<(u32, Vec<ContourPoint>)>, Box<dyn Error>> {
     let file = File::open(filename)?;
     let reader = BufReader::new(file);
