@@ -22,9 +22,15 @@ pub struct ProcessingConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct SettingsConfig {
+    pub interpolation_steps: usize,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct AppConfig {
     pub general: GeneralConfig,
     pub processing: ProcessingConfig,
+    pub settings: SettingsConfig,
 }
 
 pub fn load_config(path: &str) -> Result<AppConfig, Box<dyn Error>> {

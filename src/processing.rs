@@ -10,7 +10,9 @@ use crate::texture::{compute_uv_coordinates, compute_displacements, create_displ
 
 /// Processes a given case by reading diastolic and systolic contours, aligning them,
 /// computing displacements and UV coordinates, and finally writing out the OBJ, MTL, and texture files.
-pub fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<(), Box<dyn Error>> {
+/// Additionally it can be specified how many interpolation steps should be used to generate the final meshes
+/// used for the animation in blender.
+pub fn process_case(case_name: &str, input_dir: &str, output_dir: &str, interpolation_steps: usize) -> Result<(), Box<dyn Error>> {
     // Create the output directory if it doesn't exist.
     std::fs::create_dir_all(output_dir)?;
 
@@ -64,7 +66,7 @@ pub fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Resul
     systole_contours = smooth_contours(&mut systole_contours);
 
     // Interpolate between diastole and systole contours.
-    let steps = 30; // Number of interpolation steps
+    let steps = interpolation_steps; // Number of interpolation steps
     let interpolated_meshes = Contour::interpolate_contours(&diastole_contours, &systole_contours, steps)?;
     let interpolated_catheter_meshes = Contour::interpolate_contours(&diastole_catheter_contours, &systole_catheter_contours, steps)?;
 

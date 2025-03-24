@@ -1,8 +1,10 @@
-use crate::io::ContourPoint;
 use std::collections::HashMap;
 use std::error::Error;
 use std::f64::consts::PI;
 
+use crate::io::ContourPoint;
+
+#[allow(dead_code)] // used in processing.rs, but warning unused here otherwise
 pub struct Contour {
     pub id: u32,
     pub points: Vec<ContourPoint>,
@@ -34,7 +36,7 @@ impl Contour {
 
     /// Aligns contours by rotating and translating them so that a designated
     /// reference contour (e.g., with the highest frame index) is used as the basis.
-    pub fn align_contours(
+    fn align_contours(
         mut contours: Vec<(u32, Vec<ContourPoint>)>,
     ) -> Vec<(u32, Vec<ContourPoint>)> {
         // First, ensure every contour is sorted consistently.
@@ -155,7 +157,7 @@ impl Contour {
 
     /// Finds the best rotation angle (in radians) that minimizes the squared error
     /// between a reference and target contour (both assumed centered).
-    pub fn find_best_rotation(
+    fn find_best_rotation(
         reference: &[ContourPoint],
         target: &[ContourPoint],
     ) -> f64 {
@@ -195,7 +197,7 @@ impl Contour {
 
     /// Sorts contour points in counterclockwise order around the centroid
     /// and rotates so that the highest y-value is first.
-    pub fn sort_contour_points(contour: &mut Vec<ContourPoint>) {
+    fn sort_contour_points(contour: &mut Vec<ContourPoint>) {
         let center = Self::compute_centroid(contour);
         contour.sort_by(|a, b| {
             let angle_a = (a.y - center.1).atan2(a.x - center.0);
@@ -212,7 +214,7 @@ impl Contour {
     }
 
     /// Rotates a single point about a center by a given angle (in radians).
-    pub fn rotate_point(p: &ContourPoint, angle: f64, center: (f64, f64)) -> ContourPoint {
+    fn rotate_point(p: &ContourPoint, angle: f64, center: (f64, f64)) -> ContourPoint {
         let (cx, cy) = center;
         let x = p.x - cx;
         let y = p.y - cy;
@@ -227,7 +229,7 @@ impl Contour {
     }
 
     /// Rotates all points in a contour about a center.
-    pub fn rotate_contour(contour: &mut [ContourPoint], angle: f64, center: (f64, f64)) {
+    fn rotate_contour(contour: &mut [ContourPoint], angle: f64, center: (f64, f64)) {
         for p in contour.iter_mut() {
             let rotated = Self::rotate_point(p, angle, center);
             p.x = rotated.x;
@@ -245,7 +247,7 @@ impl Contour {
     }
 
     /// Finds the pair of farthest points in a contour.
-    pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
+    fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
         let mut max_dist = 0.0;
         let mut farthest_pair = (&contour[0], &contour[0]);
         for i in 0..contour.len() {
@@ -263,7 +265,7 @@ impl Contour {
     }
 
     /// Find the closest opposite points
-    pub fn find_closest_opposite(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
+    fn find_closest_opposite(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
         let mut min_dist = f64::MAX;
         let mut closest_pair = (&contour[0], &contour[0]);
 

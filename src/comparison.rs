@@ -10,12 +10,13 @@ use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 
-/// Processes a comparison between rest and stress for a specific cardiac phase
+/// Processes a comparison between rest and stress for a specific cardiac phase (i.e. diastole or systole).
 pub fn process_phase_comparison(
     phase_name: &str,
     rest_input_dir: &str,
     stress_input_dir: &str,
     output_dir: &str,
+    interpolation_steps: usize,
 ) -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all(output_dir)?;
 
@@ -62,7 +63,7 @@ pub fn process_phase_comparison(
     stress_contours = smooth_contours(&stress_contours);
 
     // Interpolation between rest and stress
-    let steps = 30;
+    let steps = interpolation_steps;
     let interpolated_meshes = Contour::interpolate_contours(&rest_contours, &stress_contours, steps)?;
     let interpolated_catheter_meshes = Contour::interpolate_contours(&rest_catheter_contours, &stress_catheter_contours, steps)?;
 

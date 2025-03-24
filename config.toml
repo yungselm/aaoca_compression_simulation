@@ -14,3 +14,4 @@ run_phase_comparison = true
 run_centerline_alignment = true
 
 [settings]
+interpolation_steps = 30

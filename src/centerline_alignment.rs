@@ -1,6 +1,4 @@
 use std::error::Error;
-use std::fs::File;
-use std::io::{BufWriter, Write};
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
 use crate::io::{read_centerline_txt, read_obj_mesh, write_updated_obj_mesh, ContourPoint};
  
@@ -35,10 +33,10 @@ pub struct ContourFrame {
 
 impl ContourFrame {
     /// Creates a new ContourFrame from raw contour points, calculating the centroid and normal.
-    pub fn from_contour(frame_index: u32, points: Vec<ContourPoint>) -> Self {
+    fn from_contour(frame_index: u32, points: Vec<ContourPoint>) -> Self {
         assert!(!points.is_empty(), "Cannot create ContourFrame from empty points");
 
-        let centroid_3d = Self::calculate_centroid(&points);
+        let centroid_3d = Self::calculate_centroid_3d(&points);
         let normal = Self::calculate_normal(&points, &centroid_3d);
         
         ContourFrame {
@@ -51,7 +49,7 @@ impl ContourFrame {
     }
 
     /// Calculates the geometric centroid of the contour points.
-    fn calculate_centroid(points: &[ContourPoint]) -> ContourPoint {
+    fn calculate_centroid_3d(points: &[ContourPoint]) -> ContourPoint {
         let count = points.len() as f64;
         let (sum_x, sum_y, sum_z) = points.iter().fold((0.0, 0.0, 0.0), |(sx, sy, sz), p| {
             (sx + p.x, sy + p.y, sz + p.z)
@@ -263,6 +261,7 @@ pub fn create_centerline_aligned_meshes(
     centerline_path: &str,
     input_dir: &str,
     output_dir: &str,
+    interpolation_steps: usize,
 ) -> Result<(), Box<dyn Error>> {
     // ----- Build the common centerline -----
     let raw_centerline = read_centerline_txt(centerline_path)?;
@@ -321,7 +320,7 @@ pub fn create_centerline_aligned_meshes(
     // Loop over prefixes "mesh" and "catheter" for indices 1 to 31.
     for prefix in ["mesh", "catheter"].iter() {
         let start_index = if *prefix == "mesh" { 1 } else { 0 };
-        for i in start_index..=29 {
+        for i in start_index..=(interpolation_steps - 1) {
             let obj_filename = format!("{}/{}_{:03}_{}.obj", input_dir, prefix, i, state);
             let mut mesh = read_obj_mesh(&obj_filename)?;
             rotate_contours_around_z(&mut mesh, FIXED_ROTATION_DEG);
