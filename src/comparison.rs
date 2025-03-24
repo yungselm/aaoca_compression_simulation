@@ -1,6 +1,7 @@
 // src/comparison.rs
 use crate::{
-    io::{read_contour_data, create_catheter_points, write_obj_mesh},
+    io::ContourPoint,
+    io::write_obj_mesh,
     contour::Contour,
     utils::{trim_to_same_length, smooth_contours},
     texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture},
@@ -23,16 +24,16 @@ pub fn process_phase_comparison(
     // === Process Rest Phase ===
     println!("--- Processing Rest {} ---", phase_name);
     let rest_path = Path::new(rest_input_dir).join(format!("{}_contours.csv", phase_name));
-    let rest_points = read_contour_data(rest_path.to_str().unwrap())?;
-    let rest_catheter = create_catheter_points(&rest_points);
+    let rest_points = ContourPoint::read_contour_data(rest_path.to_str().unwrap())?;
+    let rest_catheter = ContourPoint::create_catheter_points(&rest_points);
     let mut rest_contours = Contour::create_contours(rest_points);
     let mut rest_catheter_contours = Contour::create_contours(rest_catheter);
 
     // === Process Stress Phase ===
     println!("--- Processing Stress {} ---", phase_name);
     let stress_path = Path::new(stress_input_dir).join(format!("{}_contours.csv", phase_name));
-    let stress_points = read_contour_data(stress_path.to_str().unwrap())?;
-    let stress_catheter = create_catheter_points(&stress_points);
+    let stress_points = ContourPoint::read_contour_data(stress_path.to_str().unwrap())?;
+    let stress_catheter = ContourPoint::create_catheter_points(&stress_points);
     let mut stress_contours = Contour::create_contours(stress_points);
     let mut stress_catheter_contours = Contour::create_contours(stress_catheter);
 

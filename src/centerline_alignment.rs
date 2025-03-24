@@ -1,5 +1,6 @@
 use std::error::Error;
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
+use crate::io::{Centerline, CenterlinePoint};
 use crate::io::{read_centerline_txt, read_obj_mesh, write_updated_obj_mesh, ContourPoint};
  
 // const FIXED_ROTATION_DEG: f64 = 235.0;
@@ -173,52 +174,6 @@ pub fn process_mesh_frames(
         aligned_frames.push(frame);
     }
     (aligned_frames, transformations)
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Centerline {
-    pub points: Vec<CenterlinePoint>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct CenterlinePoint {
-    pub contour_point: ContourPoint,
-    pub normal: Vector3<f64>,
-}
-
-impl Centerline {
-    pub fn from_contour_points(contour_points: Vec<ContourPoint>) -> Self {
-        let mut points: Vec<CenterlinePoint> = Vec::with_capacity(contour_points.len());
-        
-        // Calculate normals for all but the last point.
-        for i in 0..contour_points.len() {
-            let current = &contour_points[i];
-            let normal = if i < contour_points.len() - 1 {
-                let next = &contour_points[i + 1];
-                Vector3::new(
-                    next.x - current.x,
-                    next.y - current.y,
-                    next.z - current.z,
-                ).normalize()
-            } else if !contour_points.is_empty() {
-                points[i - 1].normal
-            } else {
-                Vector3::zeros()
-            };
-
-            points.push(CenterlinePoint {
-                contour_point: current.clone(),
-                normal,
-            });
-        }
-
-        Centerline { points }
-    }
-
-    /// Retrieves a centerline point by matching frame index.
-    pub fn get_by_frame(&self, frame_index: u32) -> Option<&CenterlinePoint> {
-        self.points.iter().find(|p| p.contour_point.frame_index == frame_index)
-    }
 }
 
 /// Generates new face connectivity and UV coordinates from aligned frames.

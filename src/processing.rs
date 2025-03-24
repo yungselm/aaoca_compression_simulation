@@ -3,7 +3,8 @@ use std::io::Write;
 use std::path::Path;
 use std::error::Error;
 
-use crate::io::{read_contour_data, create_catheter_points, write_obj_mesh};
+use crate::io::ContourPoint;
+use crate::io::write_obj_mesh;
 use crate::contour::Contour;
 use crate::utils::{trim_to_same_length, smooth_contours};
 use crate::texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture};
@@ -19,8 +20,8 @@ pub fn process_case(case_name: &str, input_dir: &str, output_dir: &str, interpol
     // === Process Diastolic Contours ===
     println!("--- Processing {} Diastole ---", case_name);
     let diastole_path = Path::new(input_dir).join("diastolic_contours.csv");
-    let diastole_points = read_contour_data(diastole_path.to_str().unwrap())?;
-    let diastole_catheter = create_catheter_points(&diastole_points);
+    let diastole_points = ContourPoint::read_contour_data(diastole_path.to_str().unwrap())?;
+    let diastole_catheter = ContourPoint::create_catheter_points(&diastole_points);
 
     let mut diastole_contours = Contour::create_contours(diastole_points);
     let mut diastole_catheter_contours = Contour::create_contours(diastole_catheter);
@@ -28,8 +29,8 @@ pub fn process_case(case_name: &str, input_dir: &str, output_dir: &str, interpol
     // === Process Systolic Contours ===
     println!("--- Processing {} Systole ---", case_name);
     let systole_path = Path::new(input_dir).join("systolic_contours.csv");
-    let systole_points = read_contour_data(systole_path.to_str().unwrap())?;
-    let systole_catheter = create_catheter_points(&systole_points);
+    let systole_points = ContourPoint::read_contour_data(systole_path.to_str().unwrap())?;
+    let systole_catheter = ContourPoint::create_catheter_points(&systole_points);
 
     let mut systole_contours = Contour::create_contours(systole_points);
     let mut systole_catheter_contours = Contour::create_contours(systole_catheter);

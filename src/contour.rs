@@ -265,7 +265,7 @@ impl Contour {
     }
 
     /// Find the closest opposite points
-    fn find_closest_opposite(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
+    pub fn find_closest_opposite(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
         let mut min_dist = f64::MAX;
         let mut closest_pair = (&contour[0], &contour[0]);
 

@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use std::collections::HashMap;
-
+use nalgebra::Vector3;
 use std::f64::consts::PI;
 use std::io::BufRead;
 
@@ -16,62 +16,111 @@ pub struct ContourPoint {
     pub z: f64,
 }
 
-/// Reads contour points from a CSV file.
-pub fn read_contour_data<P: AsRef<Path>>(path: P) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
-    let file = File::open(path)?;
-    let mut rdr = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .delimiter(b'\t')
-        .from_reader(file);
+impl ContourPoint {
+    /// Reads contour points from a CSV file.
+    pub fn read_contour_data<P: AsRef<Path>>(path: P) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
+        let file = File::open(path)?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .delimiter(b'\t')
+            .from_reader(file);
 
-    let mut points = Vec::new();
-    for result in rdr.records() {
-        match result {
-            Ok(record) => match record.deserialize(None) {
-                Ok(point) => points.push(point),
-                Err(e) => eprintln!("Skipping invalid record: {:?}", e),
-            },
-            Err(e) => eprintln!("Skipping invalid row: {:?}", e),
+        let mut points = Vec::new();
+        for result in rdr.records() {
+            match result {
+                Ok(record) => match record.deserialize(None) {
+                    Ok(point) => points.push(point),
+                    Err(e) => eprintln!("Skipping invalid record: {:?}", e),
+                },
+                Err(e) => eprintln!("Skipping invalid row: {:?}", e),
+            }
         }
+        Ok(points)
     }
-    Ok(points)
+
+    pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
+        // Map to store unique frame indices and one associated z coordinate per frame.
+        let mut frame_z: HashMap<u32, f64> = HashMap::new();
+        for point in points {
+            // Use the first encountered z-coordinate for each frame index.
+            frame_z.entry(point.frame_index).or_insert(point.z);
+        }
+    
+        let mut catheter_points = Vec::new();
+        // Sort the frame indices to ensure a predictable order.
+        let mut frames: Vec<u32> = frame_z.keys().cloned().collect();
+        frames.sort();
+    
+        // Parameters for the catheter circle.
+        let center_x = 4.5;
+        let center_y = 4.5;
+        let radius = 0.5;
+        let num_points = 20;
+    
+        // For each unique frame, generate 10 catheter points around a circle.
+        for frame in frames {
+            let z = frame_z[&frame];
+            for i in 0..num_points {
+                let angle = 2.0 * PI * (i as f64) / (num_points as f64);
+                let x = center_x + radius * angle.cos();
+                let y = center_y + radius * angle.sin();
+                catheter_points.push(ContourPoint {
+                    frame_index: frame,
+                    x,
+                    y,
+                    z,
+                });
+            }
+        }
+        catheter_points
+    }
 }
 
-pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
-    // Map to store unique frame indices and one associated z coordinate per frame.
-    let mut frame_z: HashMap<u32, f64> = HashMap::new();
-    for point in points {
-        // Use the first encountered z-coordinate for each frame index.
-        frame_z.entry(point.frame_index).or_insert(point.z);
-    }
 
-    let mut catheter_points = Vec::new();
-    // Sort the frame indices to ensure a predictable order.
-    let mut frames: Vec<u32> = frame_z.keys().cloned().collect();
-    frames.sort();
+#[derive(Debug, Clone, PartialEq)]
+pub struct Centerline {
+    pub points: Vec<CenterlinePoint>,
+}
 
-    // Parameters for the catheter circle.
-    let center_x = 4.5;
-    let center_y = 4.5;
-    let radius = 0.5;
-    let num_points = 20;
+#[derive(Debug, Clone, PartialEq)]
+pub struct CenterlinePoint {
+    pub contour_point: ContourPoint,
+    pub normal: Vector3<f64>,
+}
 
-    // For each unique frame, generate 10 catheter points around a circle.
-    for frame in frames {
-        let z = frame_z[&frame];
-        for i in 0..num_points {
-            let angle = 2.0 * PI * (i as f64) / (num_points as f64);
-            let x = center_x + radius * angle.cos();
-            let y = center_y + radius * angle.sin();
-            catheter_points.push(ContourPoint {
-                frame_index: frame,
-                x,
-                y,
-                z,
+impl Centerline {
+    pub fn from_contour_points(contour_points: Vec<ContourPoint>) -> Self {
+        let mut points: Vec<CenterlinePoint> = Vec::with_capacity(contour_points.len());
+        
+        // Calculate normals for all but the last point.
+        for i in 0..contour_points.len() {
+            let current = &contour_points[i];
+            let normal = if i < contour_points.len() - 1 {
+                let next = &contour_points[i + 1];
+                Vector3::new(
+                    next.x - current.x,
+                    next.y - current.y,
+                    next.z - current.z,
+                ).normalize()
+            } else if !contour_points.is_empty() {
+                points[i - 1].normal
+            } else {
+                Vector3::zeros()
+            };
+
+            points.push(CenterlinePoint {
+                contour_point: current.clone(),
+                normal,
             });
         }
+
+        Centerline { points }
     }
-    catheter_points
+
+    /// Retrieves a centerline point by matching frame index.
+    pub fn get_by_frame(&self, frame_index: u32) -> Option<&CenterlinePoint> {
+        self.points.iter().find(|p| p.contour_point.frame_index == frame_index)
+    }
 }
 
 pub fn read_centerline_txt(path: &str) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
