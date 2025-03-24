@@ -1,254 +1,197 @@
-use crate::io::ContourPoint;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use std::error::Error;
-use std::f64::consts::PI;
 
-/// Computes the centroid (average x, y) of a contour.
-pub fn compute_centroid(contour: &[ContourPoint]) -> (f64, f64) {
-    let (sum_x, sum_y) = contour.iter().fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
-    let n = contour.len() as f64;
-    (sum_x / n, sum_y / n)
-}
+use crate::io::{read_contour_data, create_catheter_points, write_obj_mesh};
+use crate::contour::Contour;
+use crate::utils::{trim_to_same_length, smooth_contours};
+use crate::texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture};
 
-/// Sorts contour points in counterclockwise order around the centroid
-/// and rotates so that the highest y-value is first.
-pub fn sort_contour_points(contour: &mut Vec<ContourPoint>) {
-    let center = compute_centroid(contour);
-    contour.sort_by(|a, b| {
-        let angle_a = (a.y - center.1).atan2(a.x - center.0);
-        let angle_b = (b.y - center.1).atan2(b.x - center.0);
-        angle_a.partial_cmp(&angle_b).unwrap()
-    });
-    let start_idx = contour
-        .iter()
-        .enumerate()
-        .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
-        .map(|(i, _)| i)
-        .unwrap_or(0);
-    contour.rotate_left(start_idx);
-}
+/// Processes a given case by reading diastolic and systolic contours, aligning them,
+/// computing displacements and UV coordinates, and finally writing out the OBJ, MTL, and texture files.
+pub fn process_case(case_name: &str, input_dir: &str, output_dir: &str) -> Result<(), Box<dyn Error>> {
+    // Create the output directory if it doesn't exist.
+    std::fs::create_dir_all(output_dir)?;
 
-/// Rotates a single point about a center by a given angle (in radians).
-pub fn rotate_point(p: &ContourPoint, angle: f64, center: (f64, f64)) -> ContourPoint {
-    let (cx, cy) = center;
-    let x = p.x - cx;
-    let y = p.y - cy;
-    let cos_a = angle.cos();
-    let sin_a = angle.sin();
-    ContourPoint {
-        frame_index: p.frame_index,
-        x: x * cos_a - y * sin_a + cx,
-        y: x * sin_a + y * cos_a + cy,
-        z: p.z,
-    }
-}
+    // === Process Diastolic Contours ===
+    println!("--- Processing {} Diastole ---", case_name);
+    let diastole_path = Path::new(input_dir).join("diastolic_contours.csv");
+    let diastole_points = read_contour_data(diastole_path.to_str().unwrap())?;
+    let diastole_catheter = create_catheter_points(&diastole_points);
 
-/// Rotates all points in a contour about a center.
-pub fn rotate_contour(contour: &mut [ContourPoint], angle: f64, center: (f64, f64)) {
-    for p in contour.iter_mut() {
-        let rotated = rotate_point(p, angle, center);
-        p.x = rotated.x;
-        p.y = rotated.y;
-    }
-}
+    let mut diastole_contours = Contour::create_contours(diastole_points);
+    let mut diastole_catheter_contours = Contour::create_contours(diastole_catheter);
 
-/// Translates a contour by a given (dx, dy) offset.
-pub fn translate_contour(contour: &mut [ContourPoint], translation: (f64, f64)) {
-    let (dx, dy) = translation;
-    for p in contour.iter_mut() {
-        p.x += dx;
-        p.y += dy;
-    }
-}
+    // === Process Systolic Contours ===
+    println!("--- Processing {} Systole ---", case_name);
+    let systole_path = Path::new(input_dir).join("systolic_contours.csv");
+    let systole_points = read_contour_data(systole_path.to_str().unwrap())?;
+    let systole_catheter = create_catheter_points(&systole_points);
 
-/// Finds the pair of farthest points in a contour.
-pub fn find_farthest_points(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
-    let mut max_dist = 0.0;
-    let mut farthest_pair = (&contour[0], &contour[0]);
-    for i in 0..contour.len() {
-        for j in i + 1..contour.len() {
-            let dx = contour[i].x - contour[j].x;
-            let dy = contour[i].y - contour[j].y;
-            let dist = (dx * dx + dy * dy).sqrt();
-            if dist > max_dist {
-                max_dist = dist;
-                farthest_pair = (&contour[i], &contour[j]);
-            }
-        }
-    }
-    (farthest_pair, max_dist)
-}
+    let mut systole_contours = Contour::create_contours(systole_points);
+    let mut systole_catheter_contours = Contour::create_contours(systole_catheter);
 
-/// Find the closest opposite points
-pub fn find_closest_opposite(contour: &[ContourPoint]) -> ((&ContourPoint, &ContourPoint), f64) {
-    let mut min_dist = f64::MAX;
-    let mut closest_pair = (&contour[0], &contour[0]);
-
-    let n = contour.len();
-    for i in 0..n / 2 {
-        let j = n - 1 - i; // Opposite index of i
-        let dx = contour[i].x - contour[j].x;
-        let dy = contour[i].y - contour[j].y;
-        let dist = (dx * dx + dy * dy).sqrt(); // Euclidean distance
-
-        if dist < min_dist {
-            min_dist = dist;
-            closest_pair = (&contour[i], &contour[j]);
-        }
-    }
-
-    (closest_pair, min_dist)
-}
-
-/// Finds the best rotation angle (in radians) that minimizes the squared error
-/// between a reference and target contour (both assumed centered).
-pub fn find_best_rotation(
-    reference: &[ContourPoint],
-    target: &[ContourPoint],
-) -> f64 {
-    let mut best_angle = 0.0;
-    let mut best_error = std::f64::MAX;
-    let steps = 400;
-    // let range = 1.05; // approximately +/- 60 degrees in radians
-    let range = 0.52; // approximately +/- 30 degrees in radians
-    let start = -range;
-    let end = range;
-    let increment = (end - start) / (steps as f64);
-
-    for i in 0..=steps {
-        let angle = start + (i as f64) * increment;
-        let mut error = 0.0;
-        for (p_ref, p_target) in reference.iter().zip(target.iter()) {
-            let x = p_target.x * angle.cos() - p_target.y * angle.sin();
-            let y = p_target.x * angle.sin() + p_target.y * angle.cos();
-            let dx = x - p_ref.x;
-            let dy = y - p_ref.y;
-            error += dx * dx + dy * dy;
-        }
-        if error < best_error {
-            best_error = error;
-            best_angle = angle;
-        }
-    }
-    best_angle
-}
-
-/// Aligns contours by rotating and translating them so that a designated
-/// reference contour (e.g., with the highest frame index) is used as the basis.
-pub fn align_contours(
-    mut contours: Vec<(u32, Vec<ContourPoint>)>,
-) -> Vec<(u32, Vec<ContourPoint>)> {
-    // First, ensure every contour is sorted consistently.
-    for (_, contour) in contours.iter_mut() {
-        sort_contour_points(contour);
-    }
-
-    // Sort contours by frame index.
-    contours.sort_by_key(|(frame_index, _)| *frame_index);
-
-    // Use the contour with the highest frame index as reference.
-    let reference_index = contours.iter().map(|(id, _)| *id).max().unwrap();
-    let reference_pos = contours
-        .iter()
-        .position(|(id, _)| *id == reference_index)
-        .expect("Reference contour not found");
-    let (ref_frame, ref_contour) = &contours[reference_pos];
-    println!("Using contour {} as reference.", ref_frame);
-
-    // Rotate the reference contour so that its farthest-points line is vertical.
-    let ((p1, p2), _dist) = find_farthest_points(ref_contour);
-    let dx = p2.x - p1.x;
-    let dy = p2.y - p1.y;
-    let line_angle = dy.atan2(dx);
-    let rotation_to_y = (PI / 2.0) - line_angle;
-    println!(
-        "Reference line angle: {:.3} rad; rotating reference by {:.3} rad",
-        line_angle, rotation_to_y
-    );
-    let ref_centroid = compute_centroid(ref_contour);
-    let mut aligned_reference = ref_contour.clone();
-    rotate_contour(&mut aligned_reference, rotation_to_y, ref_centroid);
-    sort_contour_points(&mut aligned_reference);
-    contours[reference_pos].1 = aligned_reference.clone();
-
-    let reference_clone = contours[reference_pos].1.clone();
-
-    // Align every non-reference contour.
-    for (id, contour) in contours.iter_mut() {
-        if *id == reference_index {
-            continue;
-        }
-        let orig_centroid = compute_centroid(contour);
-        // Center the contour and the reference.
-        let centered: Vec<ContourPoint> = contour
-            .iter()
-            .map(|p| ContourPoint {
-                frame_index: p.frame_index,
-                x: p.x - orig_centroid.0,
-                y: p.y - orig_centroid.1,
-                z: p.z,
-            })
-            .collect();
-        let centered_reference: Vec<ContourPoint> = reference_clone
-            .iter()
-            .map(|p| ContourPoint {
-                frame_index: p.frame_index,
-                x: p.x - ref_centroid.0,
-                y: p.y - ref_centroid.1,
-                z: p.z,
-            })
-            .collect();
-
-        // Translate contour to match reference.
-        let translation = (ref_centroid.0 - orig_centroid.0, ref_centroid.1 - orig_centroid.1);
-        translate_contour(contour, translation);
-        let best_rot = find_best_rotation(&centered_reference, &centered);
-        println!(
-            "Rotating contour {} by {:.3} rad for best correlation",
-            id, best_rot
+    // Align systolic contours to the diastolic reference.
+    let diastolic_ref_centroid = Contour::compute_centroid(&diastole_contours[0].1);
+    for (_, ref mut contour) in systole_contours
+            .iter_mut()
+            .chain(systole_catheter_contours.iter_mut()) {
+        let systolic_centroid = Contour::compute_centroid(contour);
+        let translation = (
+            diastolic_ref_centroid.0 - systolic_centroid.0,
+            diastolic_ref_centroid.1 - systolic_centroid.1,
         );
-        rotate_contour(contour, best_rot, ref_centroid);
-        sort_contour_points(contour);
+        Contour::translate_contour(contour, translation);
     }
 
-    contours
-}
-
-/// Interpolates between two aligned sets of contours.
-pub fn interpolate_contours(
-    contours_start: &[(u32, Vec<ContourPoint>)],
-    contours_end: &[(u32, Vec<ContourPoint>)],
-    steps: usize,
-) -> Result<Vec<Vec<(u32, Vec<ContourPoint>)>>, Box<dyn Error>> {
-    use std::cmp::min;
-
-    let n = min(contours_start.len(), contours_end.len());
-    let start = &contours_start[0..n];
-    let end = &contours_end[0..n];
-
-    let mut interpolated = Vec::with_capacity(steps);
-    for step in 0..steps {
-        let t = step as f64 / (steps - 1) as f64;
-        let mut intermediate = Vec::with_capacity(n);
-        for ((id_start, contour_start), (id_end, contour_end)) in start.iter().zip(end.iter()) {
-            if id_start != id_end {
-                return Err("Contour IDs do not match between start and end.".into());
-            }
-            if contour_start.len() != contour_end.len() {
-                return Err("Contour point counts do not match between start and end.".into());
-            }
-            let interp_contour: Vec<ContourPoint> = contour_start
-                .iter()
-                .zip(contour_end.iter())
-                .map(|(p_start, p_end)| ContourPoint {
-                    frame_index: step as u32, // new sequential id for this interpolation step
-                    x: p_start.x * (1.0 - t) + p_end.x * t,
-                    y: p_start.y * (1.0 - t) + p_end.y * t,
-                    z: p_start.z * (1.0 - t) + p_end.z * t,
-                })
-                .collect();
-            intermediate.push((*id_start, interp_contour));
+    // Adjust the z-coordinates of systolic contours.
+    let z_translation = diastole_contours[0].1[0].z - systole_contours[0].1[0].z;
+    for (_, ref mut contour) in systole_contours
+        .iter_mut()
+        .chain(systole_catheter_contours.iter_mut()) {
+        for point in contour {
+            point.z += z_translation;
         }
-        interpolated.push(intermediate);
     }
-    Ok(interpolated)
+
+    // Ensure both contour sets have the same number of contours.
+    trim_to_same_length(&mut diastole_contours, &mut systole_contours);
+    trim_to_same_length(&mut diastole_catheter_contours, &mut systole_catheter_contours);
+
+    // Smooth contours.
+    diastole_contours = smooth_contours(&mut diastole_contours);
+    systole_contours = smooth_contours(&mut systole_contours);
+
+    // Interpolate between diastole and systole contours.
+    let steps = 30; // Number of interpolation steps
+    let interpolated_meshes = Contour::interpolate_contours(&diastole_contours, &systole_contours, steps)?;
+    let interpolated_catheter_meshes = Contour::interpolate_contours(&diastole_catheter_contours, &systole_catheter_contours, steps)?;
+
+    // === Build the Meshes to Process ===
+    // Include diastole, systole, and interpolated meshes.
+    let all_contour_meshes = std::iter::once(&diastole_contours[..])
+        .chain(std::iter::once(&systole_contours[..]))
+        .chain(interpolated_meshes.iter().map(|m| &m[..]))
+        .collect::<Vec<_>>();
+
+    // STUPID FIX since these two are always wrong: Filter out the ones with indices 1 and 2.
+    let all_contour_meshes: Vec<_> = all_contour_meshes
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, mesh)| {
+            if i == 1 || i == 2 { None } else { Some(mesh) }
+        })
+        .collect();
+        
+    // === Compute Maximum Displacement for Normalization ===
+    let mut max_disp: f32 = 0.0;
+    for mesh in &all_contour_meshes {
+        let displacements = compute_displacements(mesh, &diastole_contours);
+        println!("max_disp: {:?}", max_disp);
+        max_disp = displacements.iter().fold(max_disp, |a, &b| a.max(b));
+    }
+
+    let all_catheter_meshes = std::iter::once(&diastole_catheter_contours[..])
+        .chain(std::iter::once(&systole_catheter_contours[..]))
+        .chain(interpolated_catheter_meshes.iter().map(|m| &m[..]))
+        .collect::<Vec<_>>();
+    
+    // STUPID FIX since these two are always wrong: Filter out the ones with indices 1 and 2.
+    let all_catheter_meshes: Vec<_> = all_catheter_meshes
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, mesh)| {
+            if i == 1 || i == 2 { None } else { Some(mesh) }
+        })
+        .collect();
+
+    // --- Process Regular (Contour) Meshes ---
+    for (i, mesh) in all_contour_meshes.into_iter().enumerate() {
+        // Compute UV coordinates.
+        let uv_coords = compute_uv_coordinates(mesh);
+
+        // Determine texture dimensions.
+        let texture_height = mesh.len() as u32;
+        let texture_width = if texture_height > 0 {
+            mesh[0].1.len() as u32
+        } else {
+            0
+        };
+
+        // Compute displacement values.
+        let displacements = compute_displacements(mesh, &diastole_contours);
+
+        // Save the displacement texture.
+        let tex_filename = format!("mesh_{:03}_{}.png", i, case_name);
+        let texture_path = Path::new(output_dir).join(&tex_filename);
+        create_displacement_texture(
+            &displacements,
+            texture_width,
+            texture_height,
+            max_disp,
+            texture_path.to_str().unwrap(),
+        )?;
+
+        // Write the material file (MTL).
+        let mtl_filename = format!("mesh_{:03}_{}.mtl", i, case_name);
+        let mtl_path = Path::new(output_dir).join(&mtl_filename);
+        let mut mtl_file = File::create(&mtl_path)?;
+        writeln!(
+            mtl_file,
+            "newmtl displacement_material\nKa 1 1 1\nKd 1 1 1\nmap_Kd {}",
+            tex_filename
+        )?;
+
+        // Write the OBJ file.
+        let obj_filename = format!("mesh_{:03}_{}.obj", i, case_name);
+        let obj_path = Path::new(output_dir).join(&obj_filename);
+        write_obj_mesh(
+            mesh,
+            &uv_coords,
+            obj_path.to_str().unwrap(),
+            &mtl_filename,
+        )?;
+    }
+
+    // --- Process Catheter Meshes ---
+    for (i, mesh) in all_catheter_meshes.into_iter().enumerate() {
+        // Determine texture dimensions.
+        let texture_height = mesh.len() as u32;
+        let texture_width = if texture_height > 0 {
+            mesh[0].1.len() as u32
+        } else {
+            0
+        };
+
+        // For catheter meshes we generate a fixed (black) texture.
+        let tex_filename = format!("catheter_{:03}_{}.png", i, case_name);
+        let texture_path = Path::new(output_dir).join(&tex_filename);
+        create_black_texture(texture_width, texture_height, texture_path.to_str().unwrap())?;
+
+        // Write the material file (MTL) for catheter mesh.
+        let mtl_filename = format!("catheter_{:03}_{}.mtl", i, case_name);
+        let mtl_path = Path::new(output_dir).join(&mtl_filename);
+        let mut mtl_file = File::create(&mtl_path)?;
+        // Set both ambient and diffuse to black.
+        writeln!(
+            mtl_file,
+            "newmtl black_material\nKa 0 0 0\nKd 0 0 0\nmap_Kd {}",
+            tex_filename
+        )?;
+
+        // Compute UV coordinates (or use dummy coordinates if preferred).
+        let uv_coords = compute_uv_coordinates(mesh);
+        
+        // Write the OBJ file.
+        let obj_filename = format!("catheter_{:03}_{}.obj", i, case_name);
+        let obj_path = Path::new(output_dir).join(&obj_filename);
+        write_obj_mesh(
+            mesh,
+            &uv_coords,
+            obj_path.to_str().unwrap(),
+            &mtl_filename,
+        )?;
+    }
+Ok(())
 }

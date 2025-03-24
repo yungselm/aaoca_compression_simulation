@@ -131,7 +131,7 @@ pub fn write_obj_mesh(
     // Write vertices and compute normals
     for (_, contour) in &sorted_contours {
         vertex_offsets.push(current_offset);
-        let centroid = crate::processing::compute_centroid(contour);
+        let centroid = crate::contour::Contour::compute_centroid(contour);
         for point in contour {
             writeln!(writer, "v {} {} {}", point.x, point.y, point.z)?;
             let dx = point.x - centroid.0;

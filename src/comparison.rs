@@ -1,8 +1,7 @@
 // src/comparison.rs
 use crate::{
     io::{read_contour_data, create_catheter_points, write_obj_mesh},
-    contour::create_contours,
-    processing::{compute_centroid, translate_contour, interpolate_contours},
+    contour::Contour,
     utils::{trim_to_same_length, smooth_contours},
     texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture},
 };
@@ -25,26 +24,26 @@ pub fn process_phase_comparison(
     let rest_path = Path::new(rest_input_dir).join(format!("{}_contours.csv", phase_name));
     let rest_points = read_contour_data(rest_path.to_str().unwrap())?;
     let rest_catheter = create_catheter_points(&rest_points);
-    let mut rest_contours = create_contours(rest_points);
-    let mut rest_catheter_contours = create_contours(rest_catheter);
+    let mut rest_contours = Contour::create_contours(rest_points);
+    let mut rest_catheter_contours = Contour::create_contours(rest_catheter);
 
     // === Process Stress Phase ===
     println!("--- Processing Stress {} ---", phase_name);
     let stress_path = Path::new(stress_input_dir).join(format!("{}_contours.csv", phase_name));
     let stress_points = read_contour_data(stress_path.to_str().unwrap())?;
     let stress_catheter = create_catheter_points(&stress_points);
-    let mut stress_contours = create_contours(stress_points);
-    let mut stress_catheter_contours = create_contours(stress_catheter);
+    let mut stress_contours = Contour::create_contours(stress_points);
+    let mut stress_catheter_contours = Contour::create_contours(stress_catheter);
 
     // Align stress contours to rest reference
-    let rest_ref_centroid = compute_centroid(&rest_contours[0].1);
+    let rest_ref_centroid = Contour::compute_centroid(&rest_contours[0].1);
     for (_, contour) in stress_contours.iter_mut().chain(stress_catheter_contours.iter_mut()) {
-        let stress_centroid = compute_centroid(contour);
+        let stress_centroid = Contour::compute_centroid(contour);
         let translation = (
             rest_ref_centroid.0 - stress_centroid.0,
             rest_ref_centroid.1 - stress_centroid.1,
         );
-        translate_contour(contour, translation);
+        Contour::translate_contour(contour, translation);
     }
 
     // Z-axis alignment
@@ -64,8 +63,8 @@ pub fn process_phase_comparison(
 
     // Interpolation between rest and stress
     let steps = 30;
-    let interpolated_meshes = interpolate_contours(&rest_contours, &stress_contours, steps)?;
-    let interpolated_catheter_meshes = interpolate_contours(&rest_catheter_contours, &stress_catheter_contours, steps)?;
+    let interpolated_meshes = Contour::interpolate_contours(&rest_contours, &stress_contours, steps)?;
+    let interpolated_catheter_meshes = Contour::interpolate_contours(&rest_catheter_contours, &stress_catheter_contours, steps)?;
 
     // === Build the Meshes to Process ===
     // Include diastole, systole, and interpolated meshes.

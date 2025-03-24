@@ -321,7 +321,7 @@ pub fn create_centerline_aligned_meshes(
     // Loop over prefixes "mesh" and "catheter" for indices 1 to 31.
     for prefix in ["mesh", "catheter"].iter() {
         let start_index = if *prefix == "mesh" { 1 } else { 0 };
-        for i in start_index..=31 {
+        for i in start_index..=29 {
             let obj_filename = format!("{}/{}_{:03}_{}.obj", input_dir, prefix, i, state);
             let mut mesh = read_obj_mesh(&obj_filename)?;
             rotate_contours_around_z(&mut mesh, FIXED_ROTATION_DEG);
