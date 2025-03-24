@@ -76,7 +76,6 @@ impl ContourPoint {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct Centerline {
     pub points: Vec<CenterlinePoint>,

@@ -2,6 +2,7 @@ use std::error::Error;
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
 use crate::io::{Centerline, CenterlinePoint};
 use crate::io::{read_centerline_txt, read_obj_mesh, write_updated_obj_mesh, ContourPoint};
+use crate::contour::Contour;
  
 // const FIXED_ROTATION_DEG: f64 = 235.0;
 const FIXED_ROTATION_DEG: f64 = 220.0; // needs to be replaced with function that finds automatically.
@@ -21,6 +22,51 @@ fn rotate_contours_around_z(mesh: &mut Vec<(u32, Vec<ContourPoint>)>, degrees: f
             // z remains unchanged as we're rotating around the z-axis
         }
     }
+}
+
+/// Rotates a single contour around the z-axis by `degrees`.
+fn rotate_single_contour_around_z(contour: &[ContourPoint], degrees: f64) -> Vec<ContourPoint> {
+    let radians = degrees.to_radians();
+    let cos_theta = radians.cos();
+    let sin_theta = radians.sin();
+
+    contour
+        .iter()
+        .map(|point| ContourPoint {
+            frame_index: point.frame_index,
+            x: point.x * cos_theta - point.y * sin_theta,
+            y: point.x * sin_theta + point.y * cos_theta,
+            z: point.z,
+        })
+        .collect()
+}
+
+/// Finds the optimal rotation angle by minimizing the distance between the closest opposite point 
+/// and the reference coordinate.
+fn find_optimal_rotation(
+    contour: &[ContourPoint],
+    target_x: f64,
+    target_y: f64,
+    angle_step: f64,
+) -> f64 {
+    let mut best_angle = 0.0;
+    let mut min_distance = f64::MAX;
+
+    let mut angle_deg = 0.0;
+    while angle_deg < 360.0 {
+        let rotated = rotate_single_contour_around_z(contour, angle_deg);
+        let (closest_pair, _) = Contour::find_closest_opposite(&rotated);
+        let p = &closest_pair.0;
+        let distance = ((p.x - target_x).powi(2) + (p.y - target_y).powi(2)).sqrt();
+
+        if distance < min_distance {
+            min_distance = distance;
+            best_angle = angle_deg;
+        }
+        angle_deg += angle_step;
+    }
+
+    best_angle
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -217,6 +263,9 @@ pub fn create_centerline_aligned_meshes(
     input_dir: &str,
     output_dir: &str,
     interpolation_steps: usize,
+    x_coord_ref: f64,
+    y_coord_ref: f64,
+    z_coord_ref: f64,
 ) -> Result<(), Box<dyn Error>> {
     // ----- Build the common centerline -----
     let raw_centerline = read_centerline_txt(centerline_path)?;
@@ -225,7 +274,20 @@ pub fn create_centerline_aligned_meshes(
     // ----- Process the reference mesh: mesh_000_rest.obj -----
     let ref_mesh_path = format!("{}/mesh_000_{}.obj", input_dir, state);
     let mut reference_mesh = read_obj_mesh(&ref_mesh_path)?;
-    rotate_contours_around_z(&mut reference_mesh, FIXED_ROTATION_DEG);
+
+    // Compute optimal rotation using the first frame's contour
+    let first_frame_contour = &reference_mesh[0].1;
+    let optimal_angle = find_optimal_rotation(
+        first_frame_contour,
+        x_coord_ref,
+        y_coord_ref,
+        1.0, // Step size in degrees
+    );
+    println!("Optimal rotation angle: {:.2} degrees", optimal_angle);
+    rotate_contours_around_z(&mut reference_mesh, optimal_angle);
+    
+    // rotate_contours_around_z(&mut reference_mesh, FIXED_ROTATION_DEG);
+    
     // Compute aligned frames and capture transformation parameters.
     let (aligned_frames, transformations) = process_mesh_frames(reference_mesh, &centerline);
 

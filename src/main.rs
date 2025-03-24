@@ -33,15 +33,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     if config.processing.run_phase_comparison {
         process_phase_comparison(
             "diastolic",
-            &config.general.rest_input_path,
-            &config.general.stress_input_path,
+            &config.general.rest_output_path,
+            &config.general.stress_output_path,
             &config.general.diastole_comparison_path,
             config.settings.interpolation_steps,
         )?;
         process_phase_comparison(
             "systolic",
-            &config.general.rest_input_path,
-            &config.general.stress_input_path,
+            &config.general.rest_output_path,
+            &config.general.stress_output_path,
             &config.general.systole_comparison_path,
             config.settings.interpolation_steps,
         )?;
@@ -55,6 +55,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             &config.general.rest_output_path,
             &config.general.aligned_rest_path,
             config.settings.interpolation_steps,
+            config.settings.x_coord_ref,
+            config.settings.y_coord_ref,
+            config.settings.z_coord_ref,
         )?;
         create_centerline_aligned_meshes(
             "stress",
@@ -62,6 +65,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             &config.general.stress_output_path,
             &config.general.aligned_stress_path,
             config.settings.interpolation_steps,
+            config.settings.x_coord_ref,
+            config.settings.y_coord_ref,
+            config.settings.z_coord_ref,
         )?;
     }
     Ok(())
