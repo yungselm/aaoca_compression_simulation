@@ -24,6 +24,8 @@ pub struct ProcessingConfig {
 #[derive(Debug, Deserialize)]
 pub struct SettingsConfig {
     pub interpolation_steps: usize,
+    pub x_coord_ref: f64,
+    pub y_coord_ref: f64,
 }
 
 #[derive(Debug, Deserialize)]

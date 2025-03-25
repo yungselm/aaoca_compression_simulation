@@ -13,7 +13,11 @@ use crate::texture::{compute_uv_coordinates, compute_displacements, create_displ
 /// computing displacements and UV coordinates, and finally writing out the OBJ, MTL, and texture files.
 /// Additionally it can be specified how many interpolation steps should be used to generate the final meshes
 /// used for the animation in blender.
-pub fn process_case(case_name: &str, input_dir: &str, output_dir: &str, interpolation_steps: usize) -> Result<(), Box<dyn Error>> {
+pub fn process_case(
+    case_name: &str, 
+    input_dir: &str, 
+    output_dir: &str, 
+    interpolation_steps: usize) -> Result<(), Box<dyn Error>> {
     // Create the output directory if it doesn't exist.
     std::fs::create_dir_all(output_dir)?;
 

@@ -200,7 +200,7 @@ Ok(())
 ///   - `original` contours (e.g. rest) are sorted in order (either increasing or decreasing in z).
 ///   - Each contour’s z value is constant (all points in a given contour share the same z).
 ///   - There are at least two contours in both `original` and `reference`.
-pub fn resample_contours_with_reference_z(
+fn resample_contours_with_reference_z(
     original: &[(u32, Vec<ContourPoint>)],
     reference: &[(u32, Vec<ContourPoint>)],
 ) -> Vec<(u32, Vec<ContourPoint>)> {

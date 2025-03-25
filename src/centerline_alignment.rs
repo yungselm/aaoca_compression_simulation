@@ -265,7 +265,6 @@ pub fn create_centerline_aligned_meshes(
     interpolation_steps: usize,
     x_coord_ref: f64,
     y_coord_ref: f64,
-    z_coord_ref: f64,
 ) -> Result<(), Box<dyn Error>> {
     // ----- Build the common centerline -----
     let raw_centerline = read_centerline_txt(centerline_path)?;

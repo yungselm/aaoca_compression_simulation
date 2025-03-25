@@ -9,9 +9,32 @@ aligned_rest_path = "output/aligned_rest"
 aligned_stress_path = "output/aligned_stress"
 
 [processing]
-run_process_case = true
+run_process_case = false
 run_phase_comparison = true
-run_centerline_alignment = true
+run_centerline_alignment = false
 
 [settings]
 interpolation_steps = 30
+x_coord_ref = 12.8323
+y_coord_ref = -202.1920
+
+# [general]
+# rest_input_path = "PDJ1W2CV_csv_files/rest_csv_files"
+# stress_input_path = "PDJ1W2CV_csv_files/stress_csv_files"
+# rest_output_path = "PDJ1W2CV_csv_files/output/rest"
+# stress_output_path = "PDJ1W2CV_csv_files/output/stress"
+# diastole_comparison_path = "PDJ1W2CV_csv_files/output/diastole_comparison"
+# systole_comparison_path = "PDJ1W2CV_csv_files/output/systole_comparison"
+# aligned_rest_path = "PDJ1W2CV_csv_files/output/aligned_rest"
+# aligned_stress_path = "PDJ1W2CV_csv_files/output/aligned_stress"
+
+# [processing]
+# run_process_case = false
+# run_phase_comparison = false
+# run_centerline_alignment = true
+
+# [settings]
+# interpolation_steps = 30
+# x_coord_ref = 5.6878
+# y_coord_ref = -140.2842
+# z_coord_ref = 220.1459
