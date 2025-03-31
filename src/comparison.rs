@@ -17,11 +17,24 @@ pub fn process_phase_comparison(
     output_dir: &str,
     interpolation_steps: usize,
 ) -> Result<(), Box<dyn Error>> {
-    // Construct the file paths and then pass their string slices to read_obj_mesh.
-    let rest_path = format!("{}/mesh_000_rest.obj", rest_input_dir);
-    let stress_path = format!("{}/mesh_000_stress.obj", stress_input_dir);
-    let rest_catheter_path = format!("{}/catheter_000_rest.obj", rest_input_dir);
-    let stress_catheter_path = format!("{}/catheter_000_stress.obj", stress_input_dir);
+    let (rest_path, stress_path, rest_catheter_path, stress_catheter_path) = if phase_name == "diastolic"
+    {
+        (
+            format!("{}/mesh_000_rest.obj", rest_input_dir),
+            format!("{}/mesh_000_stress.obj", stress_input_dir),
+            format!("{}/catheter_000_rest.obj", rest_input_dir),
+            format!("{}/catheter_000_stress.obj", stress_input_dir),
+        )
+    }
+
+    else {
+        (
+            format!("{}/mesh_029_rest.obj", rest_input_dir),
+            format!("{}/mesh_029_stress.obj", stress_input_dir),
+            format!("{}/catheter_029_rest.obj", rest_input_dir),
+            format!("{}/catheter_029_stress.obj", stress_input_dir),
+        )
+    };
 
     let mut rest_contours = read_obj_mesh(&rest_path)?;
     let mut stress_contours = read_obj_mesh(&stress_path)?;
