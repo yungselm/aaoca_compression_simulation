@@ -45,7 +45,7 @@ To get output of the status of the script in the console run the following:
 ```
 Then copy paste blender_full_animation.py into Scripting module.
 
-Currently the scene setup creates 9 light sources on a sphere with a defined radius around the diastole mesh. The camera then rotates around the z- and y-axis:
+Currently the scene setup creates 12 light sources on a sphere with a defined radius around the first mesh. The camera then rotates around the z- and y-axis:
 ![Blender scene setup](media/blender_scene_setup.png)
 
 ## Aligning with a CCTA-derived centerline

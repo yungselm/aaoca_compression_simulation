@@ -1,0 +1,5 @@
+numpy
+matplotlib
+bpy
+mathutils
+pandas
