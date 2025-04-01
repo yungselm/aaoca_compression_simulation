@@ -17,9 +17,7 @@ pub fn trim_to_same_length<T>(v1: &mut Vec<T>, v2: &mut Vec<T>) -> usize {
 /// while the z coordinate remains unchanged (taken from the current contour).
 ///
 /// For the first and last contours, the current contour is used twice to simulate a mirror effect.
-pub fn smooth_contours(
-    contours: &[(u32, Vec<ContourPoint>)]
-) -> Vec<(u32, Vec<ContourPoint>)> {
+pub fn smooth_contours(contours: &[(u32, Vec<ContourPoint>)]) -> Vec<(u32, Vec<ContourPoint>)> {
     let n = contours.len();
     if n == 0 {
         return Vec::new();
@@ -34,12 +32,16 @@ pub fn smooth_contours(
             // For each point index i, get the x and y from the previous, current, and next contours.
             let (prev_pt, curr_pt, next_pt) = if j == 0 {
                 // For the first contour, use the current contour twice.
-                (&contours[j].1[i], &contours[j].1[i], &contours[j+1].1[i])
+                (&contours[j].1[i], &contours[j].1[i], &contours[j + 1].1[i])
             } else if j == n - 1 {
                 // For the last contour, use the current contour twice.
-                (&contours[j-1].1[i], &contours[j].1[i], &contours[j].1[i])
+                (&contours[j - 1].1[i], &contours[j].1[i], &contours[j].1[i])
             } else {
-                (&contours[j-1].1[i], &contours[j].1[i], &contours[j+1].1[i])
+                (
+                    &contours[j - 1].1[i],
+                    &contours[j].1[i],
+                    &contours[j + 1].1[i],
+                )
             };
 
             let avg_x = (prev_pt.x + curr_pt.x + next_pt.x) / 3.0;

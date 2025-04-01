@@ -1,14 +1,18 @@
 use crate::{
-    io::ContourPoint,
-    io::{write_obj_mesh, read_obj_mesh},
     contour::Contour,
-    utils::{trim_to_same_length, smooth_contours},
-    texture::{compute_uv_coordinates, compute_displacements, create_displacement_texture, create_black_texture},
+    io::ContourPoint,
+    io::{read_obj_mesh, write_obj_mesh},
+    texture::{
+        compute_displacements, compute_uv_coordinates, create_black_texture,
+        create_displacement_texture,
+    },
+    utils::{smooth_contours, trim_to_same_length},
+    processing::find_best_rotation_all,
 };
-use std::path::Path;
 use std::error::Error;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 
 pub fn process_phase_comparison(
     phase_name: &str,
@@ -16,25 +20,25 @@ pub fn process_phase_comparison(
     stress_input_dir: &str,
     output_dir: &str,
     interpolation_steps: usize,
+    steps_best_rotation: usize,
+    range_rotation_rad: f64,
 ) -> Result<(), Box<dyn Error>> {
-    let (rest_path, stress_path, rest_catheter_path, stress_catheter_path) = if phase_name == "diastolic"
-    {
-        (
-            format!("{}/mesh_000_rest.obj", rest_input_dir),
-            format!("{}/mesh_000_stress.obj", stress_input_dir),
-            format!("{}/catheter_000_rest.obj", rest_input_dir),
-            format!("{}/catheter_000_stress.obj", stress_input_dir),
-        )
-    }
-
-    else {
-        (
-            format!("{}/mesh_029_rest.obj", rest_input_dir),
-            format!("{}/mesh_029_stress.obj", stress_input_dir),
-            format!("{}/catheter_029_rest.obj", rest_input_dir),
-            format!("{}/catheter_029_stress.obj", stress_input_dir),
-        )
-    };
+    let (rest_path, stress_path, rest_catheter_path, stress_catheter_path) =
+        if phase_name == "diastolic" {
+            (
+                format!("{}/mesh_000_rest.obj", rest_input_dir),
+                format!("{}/mesh_000_stress.obj", stress_input_dir),
+                format!("{}/catheter_000_rest.obj", rest_input_dir),
+                format!("{}/catheter_000_stress.obj", stress_input_dir),
+            )
+        } else {
+            (
+                format!("{}/mesh_029_rest.obj", rest_input_dir),
+                format!("{}/mesh_029_stress.obj", stress_input_dir),
+                format!("{}/catheter_029_rest.obj", rest_input_dir),
+                format!("{}/catheter_029_stress.obj", stress_input_dir),
+            )
+        };
 
     let mut rest_contours = read_obj_mesh(&rest_path)?;
     let mut stress_contours = read_obj_mesh(&stress_path)?;
@@ -42,14 +46,18 @@ pub fn process_phase_comparison(
     let mut rest_catheter_contours = read_obj_mesh(&rest_catheter_path)?;
     let mut stress_catheter_contours = read_obj_mesh(&stress_catheter_path)?;
 
-    // Replace the rest contours with new contours where the x and y coordinates 
+    // Replace the rest contours with new contours where the x and y coordinates
     // are interpolated between rest and stress, and the z is taken from stress.
     rest_contours = resample_contours_with_reference_z(&rest_contours, &stress_contours);
-    rest_catheter_contours = resample_contours_with_reference_z(&rest_catheter_contours, &stress_catheter_contours);
+    rest_catheter_contours =
+        resample_contours_with_reference_z(&rest_catheter_contours, &stress_catheter_contours);
 
     // Align stress contours to rest reference
     let rest_ref_centroid = Contour::compute_centroid(&rest_contours[0].1);
-    for (_, contour) in stress_contours.iter_mut().chain(stress_catheter_contours.iter_mut()) {
+    for (_, contour) in stress_contours
+        .iter_mut()
+        .chain(stress_catheter_contours.iter_mut())
+    {
         let stress_centroid = Contour::compute_centroid(contour);
         let translation = (
             rest_ref_centroid.0 - stress_centroid.0,
@@ -60,7 +68,10 @@ pub fn process_phase_comparison(
 
     // Z-axis alignment
     let z_translation = rest_contours[0].1[0].z - stress_contours[0].1[0].z;
-    for (_, contour) in stress_contours.iter_mut().chain(stress_catheter_contours.iter_mut()) {
+    for (_, contour) in stress_contours
+        .iter_mut()
+        .chain(stress_catheter_contours.iter_mut())
+    {
         for point in contour {
             point.z += z_translation;
         }
@@ -69,14 +80,37 @@ pub fn process_phase_comparison(
     // Common processing
     trim_to_same_length(&mut rest_contours, &mut stress_contours);
     trim_to_same_length(&mut rest_catheter_contours, &mut stress_catheter_contours);
-    
+
     rest_contours = smooth_contours(&rest_contours);
     stress_contours = smooth_contours(&stress_contours);
 
+    // Compute a global best rotation for systolic contours (full stack) to best match diastolic contours.
+    // This rotates the entire systole stack (all frames) around the z-axis.
+    let best_rotation_angle = find_best_rotation_all(
+        &rest_contours,
+        &stress_contours,
+        steps_best_rotation,   // number of candidate steps (e.g. 200 or 400)
+        range_rotation_rad,    // rotation range (e.g. 1.05 for ~±60°)
+    );
+
+    println!("Rotating full systole stack by {:.3} rad to best match diastole.", best_rotation_angle);
+
+    // Apply the same rotation to every point in the systolic contours (and catheter contours if desired)
+    for (_, contour) in stress_contours.iter_mut().chain(stress_catheter_contours.iter_mut()) {
+        for point in contour.iter_mut() {
+            let x_new = point.x * best_rotation_angle.cos() - point.y * best_rotation_angle.sin();
+            let y_new = point.x * best_rotation_angle.sin() + point.y * best_rotation_angle.cos();
+            point.x = x_new;
+            point.y = y_new;
+        }
+    }   
+
     // Interpolation between rest and stress
     let steps = interpolation_steps;
-    let interpolated_meshes = Contour::interpolate_contours(&rest_contours, &stress_contours, steps)?;
-    let interpolated_catheter_meshes = Contour::interpolate_contours(&rest_catheter_contours, &stress_catheter_contours, steps)?;
+    let interpolated_meshes =
+        Contour::interpolate_contours(&rest_contours, &stress_contours, steps)?;
+    let interpolated_catheter_meshes =
+        Contour::interpolate_contours(&rest_catheter_contours, &stress_catheter_contours, steps)?;
 
     // === Build the Meshes to Process ===
     // Include diastole, systole, and interpolated meshes.
@@ -89,11 +123,9 @@ pub fn process_phase_comparison(
     let all_contour_meshes: Vec<_> = all_contour_meshes
         .into_iter()
         .enumerate()
-        .filter_map(|(i, mesh)| {
-            if i == 1 || i == 2 { None } else { Some(mesh) }
-        })
+        .filter_map(|(i, mesh)| if i == 1 || i == 2 { None } else { Some(mesh) })
         .collect();
-        
+
     // === Compute Maximum Displacement for Normalization ===
     let mut max_disp: f32 = 0.0;
     for mesh in &all_contour_meshes {
@@ -106,15 +138,13 @@ pub fn process_phase_comparison(
         .chain(std::iter::once(&stress_catheter_contours[..]))
         .chain(interpolated_catheter_meshes.iter().map(|m| &m[..]))
         .collect::<Vec<_>>();
-    
+
     // STUPID FIX since these two are always wrong: Filter out the ones with indices 1 and 2.
     let all_catheter_meshes: Vec<_> = all_catheter_meshes
         .into_iter()
         .enumerate()
-        .filter_map(|(i, mesh)| {
-            if i == 1 || i == 2 { None } else { Some(mesh) }
-        })
-        .collect();    
+        .filter_map(|(i, mesh)| if i == 1 || i == 2 { None } else { Some(mesh) })
+        .collect();
 
     // --- Process Regular (Contour) Meshes ---
     for (i, mesh) in all_contour_meshes.into_iter().enumerate() {
@@ -156,12 +186,7 @@ pub fn process_phase_comparison(
         // Write the OBJ file.
         let obj_filename = format!("mesh_{:03}_{}.obj", i, phase_name);
         let obj_path = Path::new(output_dir).join(&obj_filename);
-        write_obj_mesh(
-            mesh,
-            &uv_coords,
-            obj_path.to_str().unwrap(),
-            &mtl_filename,
-        )?;
+        write_obj_mesh(mesh, &uv_coords, obj_path.to_str().unwrap(), &mtl_filename)?;
     }
 
     // --- Process Catheter Meshes ---
@@ -177,7 +202,11 @@ pub fn process_phase_comparison(
         // For catheter meshes we generate a fixed (black) texture.
         let tex_filename = format!("catheter_{:03}_{}.png", i, phase_name);
         let texture_path = Path::new(output_dir).join(&tex_filename);
-        create_black_texture(texture_width, texture_height, texture_path.to_str().unwrap())?;
+        create_black_texture(
+            texture_width,
+            texture_height,
+            texture_path.to_str().unwrap(),
+        )?;
 
         // Write the material file (MTL) for catheter mesh.
         let mtl_filename = format!("catheter_{:03}_{}.mtl", i, phase_name);
@@ -192,18 +221,13 @@ pub fn process_phase_comparison(
 
         // Compute UV coordinates (or use dummy coordinates if preferred).
         let uv_coords = compute_uv_coordinates(mesh);
-        
+
         // Write the OBJ file.
         let obj_filename = format!("catheter_{:03}_{}.obj", i, phase_name);
         let obj_path = Path::new(output_dir).join(&obj_filename);
-        write_obj_mesh(
-            mesh,
-            &uv_coords,
-            obj_path.to_str().unwrap(),
-            &mtl_filename,
-        )?;
+        write_obj_mesh(mesh, &uv_coords, obj_path.to_str().unwrap(), &mtl_filename)?;
     }
-Ok(())
+    Ok(())
 }
 
 /// Resamples a stack of contours so that the new z‑spacing exactly matches the spacing

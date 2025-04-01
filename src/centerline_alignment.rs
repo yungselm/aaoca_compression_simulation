@@ -1,9 +1,9 @@
-use std::error::Error;
-use nalgebra::{Point3, Rotation3, Unit, Vector3};
-use crate::io::{Centerline, CenterlinePoint};
-use crate::io::{read_centerline_txt, read_obj_mesh, write_updated_obj_mesh, ContourPoint};
 use crate::contour::Contour;
- 
+use crate::io::{read_centerline_txt, read_obj_mesh, write_updated_obj_mesh, ContourPoint};
+use crate::io::{Centerline, CenterlinePoint};
+use nalgebra::{Point3, Rotation3, Unit, Vector3};
+use std::error::Error;
+
 // const FIXED_ROTATION_DEG: f64 = 235.0;
 const FIXED_ROTATION_DEG: f64 = 220.0; // needs to be replaced with function that finds automatically.
 
@@ -41,7 +41,7 @@ fn rotate_single_contour_around_z(contour: &[ContourPoint], degrees: f64) -> Vec
         .collect()
 }
 
-/// Finds the optimal rotation angle by minimizing the distance between the closest opposite point 
+/// Finds the optimal rotation angle by minimizing the distance between the closest opposite point
 /// and the reference coordinate.
 fn find_optimal_rotation(
     contour: &[ContourPoint],
@@ -72,20 +72,23 @@ fn find_optimal_rotation(
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContourFrame {
     pub frame_index: u32,
-    pub points: Vec<ContourPoint>,  // 500 points per frame
+    pub points: Vec<ContourPoint>, // 500 points per frame
     pub centroid_3d: ContourPoint,
-    pub normal: Vector3<f64>,       // Frame's normal vector
-    pub translation: Point3<f64>,   // Translation from centerline
+    pub normal: Vector3<f64>,     // Frame's normal vector
+    pub translation: Point3<f64>, // Translation from centerline
 }
 
 impl ContourFrame {
     /// Creates a new ContourFrame from raw contour points, calculating the centroid and normal.
     fn from_contour(frame_index: u32, points: Vec<ContourPoint>) -> Self {
-        assert!(!points.is_empty(), "Cannot create ContourFrame from empty points");
+        assert!(
+            !points.is_empty(),
+            "Cannot create ContourFrame from empty points"
+        );
 
         let centroid_3d = Self::calculate_centroid_3d(&points);
         let normal = Self::calculate_normal(&points, &centroid_3d);
-        
+
         ContourFrame {
             frame_index,
             points,
@@ -116,7 +119,7 @@ impl ContourFrame {
         let p1 = &points[0];
         let p2 = &points[points.len() / 3];
         let p3 = &points[2 * points.len() / 3];
-        
+
         let v1 = Vector3::new(p1.x - centroid.x, p1.y - centroid.y, p1.z - centroid.z);
         let v2 = Vector3::new(p2.x - centroid.x, p2.y - centroid.y, p2.z - centroid.z);
         let v3 = Vector3::new(p3.x - centroid.x, p3.y - centroid.y, p3.z - centroid.z);
@@ -224,14 +227,12 @@ pub fn process_mesh_frames(
 
 /// Generates new face connectivity and UV coordinates from aligned frames.
 /// Assumes every frame has the same number of points.
-fn generate_faces_and_uv(
-    frames: &[ContourFrame]
-) -> (Vec<(usize, usize, usize)>, Vec<(f32, f32)>) {
+fn generate_faces_and_uv(frames: &[ContourFrame]) -> (Vec<(usize, usize, usize)>, Vec<(f32, f32)>) {
     let num_frames = frames.len();
     let points_per_frame = frames[0].points.len();
     let mut faces = Vec::new();
     let mut uv_coords = Vec::with_capacity(num_frames * points_per_frame);
-    
+
     // Generate new UV coordinates.
     for i in 0..num_frames {
         let v = (i as f32 + 0.5) / num_frames as f32;
@@ -240,7 +241,7 @@ fn generate_faces_and_uv(
             uv_coords.push((u, v));
         }
     }
-    
+
     // Generate new faces: For each adjacent pair of frames,
     // create two triangles per quad.
     for i in 0..(num_frames - 1) {
@@ -284,9 +285,9 @@ pub fn create_centerline_aligned_meshes(
     );
     println!("Optimal rotation angle: {:.2} degrees", optimal_angle);
     rotate_contours_around_z(&mut reference_mesh, optimal_angle);
-    
+
     // rotate_contours_around_z(&mut reference_mesh, FIXED_ROTATION_DEG);
-    
+
     // Compute aligned frames and capture transformation parameters.
     let (aligned_frames, transformations) = process_mesh_frames(reference_mesh, &centerline);
 
@@ -294,7 +295,12 @@ pub fn create_centerline_aligned_meshes(
     let (new_faces, new_uvs) = generate_faces_and_uv(&aligned_frames);
     let new_vertices: Vec<(f32, f32, f32)> = aligned_frames
         .iter()
-        .flat_map(|frame| frame.points.iter().map(|pt| (pt.x as f32, pt.y as f32, pt.z as f32)))
+        .flat_map(|frame| {
+            frame
+                .points
+                .iter()
+                .map(|pt| (pt.x as f32, pt.y as f32, pt.z as f32))
+        })
         .collect();
     let new_normals: Vec<(f32, f32, f32)> = aligned_frames
         .iter()
@@ -329,7 +335,8 @@ pub fn create_centerline_aligned_meshes(
         &new_faces,
     )?;
     println!(
-        "Reference mesh (mesh_000_{}.obj) processed and transformation parameters stored.", state
+        "Reference mesh (mesh_000_{}.obj) processed and transformation parameters stored.",
+        state
     );
 
     // ----- Process subsequent meshes using stored transformation parameters -----
@@ -343,8 +350,9 @@ pub fn create_centerline_aligned_meshes(
 
             // Apply transformation for each frame in the mesh.
             for (frame_index, contours) in mesh.iter_mut() {
-                if let Some(transformation) =
-                    transformations.iter().find(|t| t.frame_index == *frame_index)
+                if let Some(transformation) = transformations
+                    .iter()
+                    .find(|t| t.frame_index == *frame_index)
                 {
                     for point in contours.iter_mut() {
                         // Translation.
@@ -361,7 +369,10 @@ pub fn create_centerline_aligned_meshes(
                         point.z = rotated_point.z;
                     }
                 } else {
-                    println!("Warning: No transformation found for frame index {}", frame_index);
+                    println!(
+                        "Warning: No transformation found for frame index {}",
+                        frame_index
+                    );
                 }
             }
 
@@ -369,7 +380,9 @@ pub fn create_centerline_aligned_meshes(
             let new_vertices: Vec<(f32, f32, f32)> = mesh
                 .iter()
                 .flat_map(|(_frame_index, contours)| {
-                    contours.iter().map(|pt| (pt.x as f32, pt.y as f32, pt.z as f32))
+                    contours
+                        .iter()
+                        .map(|pt| (pt.x as f32, pt.y as f32, pt.z as f32))
                 })
                 .collect();
             let num_frames = mesh.len();

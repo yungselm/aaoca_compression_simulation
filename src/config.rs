@@ -1,6 +1,6 @@
 use serde::Deserialize;
-use std::fs;
 use std::error::Error;
+use std::fs;
 
 #[derive(Debug, Deserialize)]
 pub struct GeneralConfig {

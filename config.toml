@@ -18,7 +18,8 @@ interpolation_steps = 30
 x_coord_ref = 12.8323
 y_coord_ref = -202.1920
 steps_best_rotation = 300
-range_rotation_rad = 1.05 # +/- 60 degrees
+# range_rotation_rad = 1.05 # +/- 60 degrees
+range_rotation_rad = 1.57 # +/- 90 degrees
 
 # [general]
 # rest_input_path = "PDJ1W2CV_csv_files/rest_csv_files"

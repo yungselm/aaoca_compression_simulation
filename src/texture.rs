@@ -1,6 +1,6 @@
-use std::error::Error;
-use image::{ImageBuffer, Rgb};
 use crate::io::ContourPoint;
+use image::{ImageBuffer, Rgb};
+use std::error::Error;
 
 pub fn compute_uv_coordinates(contours: &[(u32, Vec<ContourPoint>)]) -> Vec<(f32, f32)> {
     let points_per_contour = contours[0].1.len();
