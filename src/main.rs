@@ -22,11 +22,17 @@ fn main() -> Result<(), Box<dyn Error>> {
         process_case("rest", 
         &config.general.rest_input_path, 
         &config.general.rest_output_path, 
-        config.settings.interpolation_steps)?;
+        config.settings.interpolation_steps,
+        config.settings.steps_best_rotation,
+        config.settings.range_rotation_rad,
+        )?;
         process_case("stress", 
         &config.general.stress_input_path, 
         &config.general.stress_output_path, 
-        config.settings.interpolation_steps)?;
+        config.settings.interpolation_steps,
+        config.settings.steps_best_rotation,
+        config.settings.range_rotation_rad,
+        )?;
     }
 
     // Run phase comparison if enabled.

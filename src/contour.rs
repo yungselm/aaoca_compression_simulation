@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::f64::consts::PI;
+use rayon::prelude::*;
 
 use crate::io::ContourPoint;
 
@@ -14,7 +15,11 @@ impl Contour {
     /// Creates contours from a list of contour points.
     ///
     /// Groups points by their frame index, aligns them, and re-indexes.
-    pub fn create_contours(points: Vec<ContourPoint>) -> Vec<(u32, Vec<ContourPoint>)> {
+    pub fn create_contours(
+        points: Vec<ContourPoint>,
+        steps: usize, 
+        range: f64
+    ) -> Vec<(u32, Vec<ContourPoint>)> {
         // Group points by frame index.
         let mut groups: HashMap<u32, Vec<ContourPoint>> = HashMap::new();
         for p in points {
@@ -24,7 +29,7 @@ impl Contour {
         let mut contours: Vec<_> = groups.into_iter().collect();
 
         // Align and sort contours using processing routines.
-        contours = Self::align_contours(contours);
+        contours = Self::align_contours(contours, steps, range);
         // Optionally, sort them in descending order by frame (or re-index).
         contours.sort_by_key(|(frame, _)| std::cmp::Reverse(*frame));
         contours
@@ -38,6 +43,8 @@ impl Contour {
     /// reference contour (e.g., with the highest frame index) is used as the basis.
     fn align_contours(
         mut contours: Vec<(u32, Vec<ContourPoint>)>,
+        steps: usize,
+        range: f64,
     ) -> Vec<(u32, Vec<ContourPoint>)> {
         // First, ensure every contour is sorted consistently.
         for (_, contour) in contours.iter_mut() {
@@ -103,7 +110,7 @@ impl Contour {
             // Translate contour to match reference.
             let translation = (ref_centroid.0 - orig_centroid.0, ref_centroid.1 - orig_centroid.1);
             Self::translate_contour(contour, translation);
-            let best_rot = Self::find_best_rotation(&centered_reference, &centered);
+            let best_rot = Self::find_best_rotation(&centered_reference, &centered, steps, range);
             println!(
                 "Rotating contour {} by {:.3} rad for best correlation",
                 id, best_rot
@@ -155,37 +162,58 @@ impl Contour {
         Ok(interpolated)
     }
 
-    /// Finds the best rotation angle (in radians) that minimizes the squared error
-    /// between a reference and target contour (both assumed centered).
+    /// Finds the best rotation angle (in radians) that minimizes the Hausdorff distance
+    /// leveraging parallel computation for performance.
     fn find_best_rotation(
         reference: &[ContourPoint],
         target: &[ContourPoint],
+        steps: usize,
+        range: f64,
     ) -> f64 {
-        let mut best_angle = 0.0;
-        let mut best_error = std::f64::MAX;
-        let steps = 400;
-        // let range = 1.05; // approximately +/- 60 degrees in radians
-        let range = 0.52; // approximately +/- 30 degrees in radians
-        let start = -range;
-        let end = range;
-        let increment = (end - start) / (steps as f64);
+        let steps = steps;  // Reduce to optimize performance
+        let range = range; // +/- 60 degrees
+        let increment = (2.0 * range) / (steps as f64);
 
-        for i in 0..=steps {
-            let angle = start + (i as f64) * increment;
-            let mut error = 0.0;
-            for (p_ref, p_target) in reference.iter().zip(target.iter()) {
-                let x = p_target.x * angle.cos() - p_target.y * angle.sin();
-                let y = p_target.x * angle.sin() + p_target.y * angle.cos();
-                let dx = x - p_ref.x;
-                let dy = y - p_ref.y;
-                error += dx * dx + dy * dy;
-            }
-            if error < best_error {
-                best_error = error;
-                best_angle = angle;
-            }
-        }
-        best_angle
+        (0..=steps)
+            .into_par_iter() // Parallel iteration (requires Rayon)
+            .map(|i| {
+                let angle = -range + (i as f64) * increment;
+                
+                // Rotate target contour inline without extra allocation
+                let rotated: Vec<ContourPoint> = target.iter().map(|p| {
+                    let x = p.x * angle.cos() - p.y * angle.sin();
+                    let y = p.x * angle.sin() + p.y * angle.cos();
+                    ContourPoint { frame_index: p.frame_index, x, y, z: p.z }
+                }).collect();
+
+                let hausdorff_dist = Self::hausdorff_distance(reference, &rotated);
+                (angle, hausdorff_dist)
+            })
+            .reduce(|| (0.0, std::f64::MAX), |(best_a, best_d), (angle, dist)| {
+                if dist < best_d { (angle, dist) } else { (best_a, best_d) }
+            }).0
+    }
+
+    /// Computes the Hausdorff distance between two point sets.
+    fn hausdorff_distance(set1: &[ContourPoint], set2: &[ContourPoint]) -> f64 {
+        let forward = Self::directed_hausdorff(set1, set2);
+        let backward = Self::directed_hausdorff(set2, set1);
+        forward.max(backward) // Hausdorff distance is max of both directed distances
+    }
+
+    /// Computes directed Hausdorff distance from A to B
+    fn directed_hausdorff(contour_a: &[ContourPoint], contour_b: &[ContourPoint]) -> f64 {
+        contour_a.par_iter() // Use parallel iteration
+            .map(|pa| {
+                contour_b.iter()
+                    .map(|pb| {
+                        let dx = pa.x - pb.x;
+                        let dy = pa.y - pb.y;
+                        (dx * dx + dy * dy).sqrt()
+                    })
+                    .fold(std::f64::MAX, f64::min) // Directly find min without storing a Vec
+            })
+            .reduce(|| 0.0, f64::max) // Directly find max without extra allocation
     }
 
     /// Computes the centroid (average x, y) of a contour.

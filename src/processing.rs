@@ -17,7 +17,10 @@ pub fn process_case(
     case_name: &str, 
     input_dir: &str, 
     output_dir: &str, 
-    interpolation_steps: usize) -> Result<(), Box<dyn Error>> {
+    interpolation_steps: usize,
+    steps_best_rotation: usize,
+    range_rotation_rad: f64,
+) -> Result<(), Box<dyn Error>> {
     // Create the output directory if it doesn't exist.
     std::fs::create_dir_all(output_dir)?;
 
@@ -27,8 +30,9 @@ pub fn process_case(
     let diastole_points = ContourPoint::read_contour_data(diastole_path.to_str().unwrap())?;
     let diastole_catheter = ContourPoint::create_catheter_points(&diastole_points);
 
-    let mut diastole_contours = Contour::create_contours(diastole_points);
-    let mut diastole_catheter_contours = Contour::create_contours(diastole_catheter);
+
+    let mut diastole_contours = Contour::create_contours(diastole_points, steps_best_rotation, range_rotation_rad);
+    let mut diastole_catheter_contours = Contour::create_contours(diastole_catheter, steps_best_rotation, range_rotation_rad);
 
     // === Process Systolic Contours ===
     println!("--- Processing {} Systole ---", case_name);
@@ -36,8 +40,8 @@ pub fn process_case(
     let systole_points = ContourPoint::read_contour_data(systole_path.to_str().unwrap())?;
     let systole_catheter = ContourPoint::create_catheter_points(&systole_points);
 
-    let mut systole_contours = Contour::create_contours(systole_points);
-    let mut systole_catheter_contours = Contour::create_contours(systole_catheter);
+    let mut systole_contours = Contour::create_contours(systole_points, steps_best_rotation, range_rotation_rad);
+    let mut systole_catheter_contours = Contour::create_contours(systole_catheter, steps_best_rotation, range_rotation_rad);
 
     // Align systolic contours to the diastolic reference.
     let diastolic_ref_centroid = Contour::compute_centroid(&diastole_contours[0].1);

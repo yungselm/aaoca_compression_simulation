@@ -26,6 +26,8 @@ pub struct SettingsConfig {
     pub interpolation_steps: usize,
     pub x_coord_ref: f64,
     pub y_coord_ref: f64,
+    pub steps_best_rotation: usize,
+    pub range_rotation_rad: f64,
 }
 
 #[derive(Debug, Deserialize)]
