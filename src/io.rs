@@ -188,7 +188,7 @@ pub fn write_obj_mesh(
             } else {
                 (0.0, 0.0, 0.0)
             };
-            normals.push((nx, ny, nz));
+            normals.push((nx * -1.0, ny * -1.0, nz * -1.0));
             current_offset += 1;
         }
     }
