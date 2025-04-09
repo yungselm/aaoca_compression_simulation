@@ -69,6 +69,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.settings.interpolation_steps,
             config.settings.x_coord_ref,
             config.settings.y_coord_ref,
+            config.settings.z_coord_ref,
         )?;
         create_centerline_aligned_meshes(
             "stress",
@@ -78,6 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.settings.interpolation_steps,
             config.settings.x_coord_ref,
             config.settings.y_coord_ref,
+            config.settings.z_coord_ref,
         )?;
     }
     Ok(())

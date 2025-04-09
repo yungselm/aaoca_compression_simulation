@@ -1,7 +1,6 @@
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::error::Error;
-use std::f32::NEG_INFINITY;
 use std::f64::consts::PI;
 
 use crate::io::ContourPoint;
@@ -10,6 +9,7 @@ use crate::io::ContourPoint;
 pub struct Contour {
     pub id: u32,
     pub points: Vec<ContourPoint>,
+    pub centroid: (f64, f64, f64),
 }
 
 impl Contour {
@@ -20,6 +20,7 @@ impl Contour {
         points: Vec<ContourPoint>,
         steps: usize,
         range: f64,
+        reference_point: &ContourPoint, // needs to be set on aortic wall ostium!
     ) -> Vec<(u32, Vec<ContourPoint>)> {
         // Group points by frame index.
         let mut groups: HashMap<u32, Vec<ContourPoint>> = HashMap::new();
@@ -30,9 +31,12 @@ impl Contour {
         let mut contours: Vec<_> = groups.into_iter().collect();
 
         // Align and sort contours using processing routines.
-        contours = Self::align_contours(contours, steps, range);
+        contours = Self::align_contours(contours, steps, range, reference_point);
+        
         // Optionally, sort them in descending order by frame (or re-index).
+        // This ensures that ostium has index 0, because usually last frame in pullback
         contours.sort_by_key(|(frame, _)| std::cmp::Reverse(*frame));
+
         contours
             .into_iter()
             .enumerate()
@@ -46,12 +50,8 @@ impl Contour {
         mut contours: Vec<(u32, Vec<ContourPoint>)>,
         steps: usize,
         range: f64,
+        reference_point: &ContourPoint,
     ) -> Vec<(u32, Vec<ContourPoint>)> {
-        // First, ensure every contour is sorted consistently.
-        for (_, contour) in contours.iter_mut() {
-            Self::sort_contour_points(contour);
-        }
-
         // Sort contours by frame index.
         contours.sort_by_key(|(frame_index, _)| *frame_index);
 
@@ -69,7 +69,7 @@ impl Contour {
         let dx = p2.x - p1.x;
         let dy = p2.y - p1.y;
         let line_angle = dy.atan2(dx);
-        let rotation_to_y = (PI / 2.0) - line_angle;
+        let mut rotation_to_y = (PI / 2.0) - line_angle;
         println!(
             "Reference line angle: {:.3} rad; rotating reference by {:.3} rad",
             line_angle, rotation_to_y
@@ -78,6 +78,53 @@ impl Contour {
         let mut aligned_reference = ref_contour.clone();
         Self::rotate_contour(&mut aligned_reference, rotation_to_y, ref_centroid);
         Self::sort_contour_points(&mut aligned_reference);
+        let mut aligned_reference_point = reference_point.clone();
+        Self::rotate_point(&mut aligned_reference_point, rotation_to_y, (5.0, 5.0));
+
+        let n = aligned_reference.len() / 2;
+
+        // --- Begin aortic determination ---
+        // We assume there are exactly 500 points; split into two halves: indices 0..249 and 250..499.
+        // Compute the cumulative distance for each half from the rotated reference.
+        let first_half_distance: f64 = aligned_reference
+            .iter()
+            .take(n)
+            .map(|pt| pt.distance_to(&aligned_reference_point))
+            .sum();
+        let second_half_distance: f64 = aligned_reference
+            .iter()
+            .skip(n)
+            .map(|pt| pt.distance_to(&aligned_reference_point))
+            .sum();
+
+        // Debug output: print average distances for each half.
+        println!(
+            "First half avg distance: {:.3}, Second half avg distance: {:.3}",
+            first_half_distance / (n as f64),
+            second_half_distance / (n as f64)
+        );
+
+        // Mark the half that is closer as 'aortic' (i.e. set to true).
+        if first_half_distance < second_half_distance {
+            for pt in aligned_reference.iter_mut().take(n) {
+                pt.aortic = true;
+            }
+            println!("First half (points 0 to 249) marked as aortic.");
+            if first_half_distance < 5.0 {
+                rotation_to_y += PI;
+                Self::rotate_contour(&mut aligned_reference, PI, ref_centroid);
+            }
+        } else {
+            for pt in aligned_reference.iter_mut().skip(n) {
+                pt.aortic = true;
+            }
+            println!("Second half (points 250 to 499) marked as aortic.");
+            if second_half_distance < 5.0 {
+                rotation_to_y += PI;
+                Self::rotate_contour(&mut aligned_reference, PI, ref_centroid);
+            }
+        }
+
         contours[reference_pos].1 = aligned_reference.clone();
 
         let reference_clone = contours[reference_pos].1.clone();
@@ -88,6 +135,7 @@ impl Contour {
                 continue;
             }
             let orig_centroid = Self::compute_centroid(contour);
+            Self::rotate_contour(contour, rotation_to_y, orig_centroid);
             // Center the contour and the reference.
             let centered: Vec<ContourPoint> = contour
                 .iter()
@@ -96,6 +144,7 @@ impl Contour {
                     x: p.x - orig_centroid.0,
                     y: p.y - orig_centroid.1,
                     z: p.z,
+                    aortic: p.aortic,
                 })
                 .collect();
             let centered_reference: Vec<ContourPoint> = reference_clone
@@ -105,6 +154,7 @@ impl Contour {
                     x: p.x - ref_centroid.0,
                     y: p.y - ref_centroid.1,
                     z: p.z,
+                    aortic: p.aortic,
                 })
                 .collect();
 
@@ -121,8 +171,12 @@ impl Contour {
             );
             Self::rotate_contour(contour, best_rot, ref_centroid);
             Self::sort_contour_points(contour);
+            
+            // set first half to aortic false and second to true
+            for pt in contour.iter_mut().skip(n) {
+                pt.aortic = true;
+            }
         }
-
         contours
     }
 
@@ -157,6 +211,7 @@ impl Contour {
                         x: p_start.x * (1.0 - t) + p_end.x * t,
                         y: p_start.y * (1.0 - t) + p_end.y * t,
                         z: p_start.z * (1.0 - t) + p_end.z * t,
+                        aortic: p_start.aortic,
                     })
                     .collect();
                 intermediate.push((*id_start, interp_contour));
@@ -194,6 +249,7 @@ impl Contour {
                             x,
                             y,
                             z: p.z,
+                            aortic: p.aortic,
                         }
                     })
                     .collect();
@@ -277,6 +333,7 @@ impl Contour {
             x: x * cos_a - y * sin_a + cx,
             y: x * sin_a + y * cos_a + cy,
             z: p.z,
+            aortic: p.aortic,
         }
     }
 

@@ -4,9 +4,6 @@ use crate::io::{Centerline, CenterlinePoint};
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
 use std::error::Error;
 
-// const FIXED_ROTATION_DEG: f64 = 235.0;
-const FIXED_ROTATION_DEG: f64 = 220.0; // needs to be replaced with function that finds automatically.
-
 /// Applies a fixed rotation around the z-axis to preserve the initial in-plane orientation.
 fn rotate_contours_around_z(mesh: &mut Vec<(u32, Vec<ContourPoint>)>, degrees: f64) {
     let radians = degrees.to_radians();
@@ -37,27 +34,79 @@ fn rotate_single_contour_around_z(contour: &[ContourPoint], degrees: f64) -> Vec
             x: point.x * cos_theta - point.y * sin_theta,
             y: point.x * sin_theta + point.y * cos_theta,
             z: point.z,
+            aortic: point.aortic
         })
         .collect()
 }
 
+// /// Finds the optimal rotation angle by minimizing the distance between the closest opposite point
+// /// and the reference coordinate.
+// fn find_optimal_rotation(
+//     contour: &[ContourPoint],
+//     target_x: f64,
+//     target_y: f64,
+//     angle_step: f64,
+// ) -> f64 {
+//     let mut best_angle = 0.0;
+//     let mut min_distance = f64::MAX;
+
+//     let mut angle_deg = 0.0;
+//     while angle_deg < 360.0 {
+//         let rotated = rotate_single_contour_around_z(contour, angle_deg);
+//         let (closest_pair, _) = Contour::find_closest_opposite(&rotated);
+        
+//         // Select the point where aortic is true.
+//         let p = if closest_pair.0.aortic {
+//             closest_pair.0
+//         } else {
+//             closest_pair.1
+//         };
+
+//         let distance = ((p.x - target_x).powi(2) + (p.y - target_y).powi(2)).sqrt();
+
+//         if distance < min_distance {
+//             min_distance = distance;
+//             best_angle = angle_deg;
+//         }
+//         angle_deg += angle_step;
+//     }
+
+//     best_angle
+// }
+
 /// Finds the optimal rotation angle by minimizing the distance between the closest opposite point
 /// and the reference coordinate.
 fn find_optimal_rotation(
-    contour: &[ContourPoint],
+    contour: &Vec<ContourPoint>,
     target_x: f64,
     target_y: f64,
+    target_z: f64,
     angle_step: f64,
+    centerline_point: &CenterlinePoint
 ) -> f64 {
+    let target = Point3::new(target_x, target_y, target_z);
+
     let mut best_angle = 0.0;
     let mut min_distance = f64::MAX;
-
+    
     let mut angle_deg = 0.0;
     while angle_deg < 360.0 {
         let rotated = rotate_single_contour_around_z(contour, angle_deg);
+
+        let mut temp_frame = ContourFrame::from_contour(0, contour.clone());
+        align_frame(&mut temp_frame, centerline_point);
+
         let (closest_pair, _) = Contour::find_closest_opposite(&rotated);
-        let p = &closest_pair.0;
-        let distance = ((p.x - target_x).powi(2) + (p.y - target_y).powi(2)).sqrt();
+        
+        // Select the point where aortic is true.
+        let p = if closest_pair.0.aortic {
+            closest_pair.0
+        } else {
+            closest_pair.1
+        };
+
+        let p_point = Point3::new(p.x, p.y, p.z);
+        let distance = nalgebra::distance(&p_point, &target);
 
         if distance < min_distance {
             min_distance = distance;
@@ -110,6 +159,7 @@ impl ContourFrame {
             x: sum_x / count,
             y: sum_y / count,
             z: sum_z / count,
+            aortic: points.first().map(|p| p.aortic).unwrap_or(false),
         }
     }
 
@@ -266,6 +316,7 @@ pub fn create_centerline_aligned_meshes(
     interpolation_steps: usize,
     x_coord_ref: f64,
     y_coord_ref: f64,
+    z_coord_ref: f64,
 ) -> Result<(), Box<dyn Error>> {
     // ----- Build the common centerline -----
     let raw_centerline = read_centerline_txt(centerline_path)?;
@@ -275,14 +326,32 @@ pub fn create_centerline_aligned_meshes(
     let ref_mesh_path = format!("{}/mesh_000_{}.obj", input_dir, state);
     let mut reference_mesh = read_obj_mesh(&ref_mesh_path)?;
 
+    // Set `aortic` to false for points in the first half of the reference mesh
+    // and to true for points in the second half.
+    for (_, contours) in reference_mesh.iter_mut() {
+        let half_len = contours.len() / 2;
+        for (i, point) in contours.iter_mut().enumerate() {
+            point.aortic = i >= half_len;
+        }
+    }
+
     // Compute optimal rotation using the first frame's contour
     let first_frame_contour = &reference_mesh[0].1;
+    // let optimal_angle = find_optimal_rotation(
+    //     first_frame_contour,
+    //     x_coord_ref,
+    //     y_coord_ref,
+    //     1.0, // Step size in degrees
+    // );
     let optimal_angle = find_optimal_rotation(
         first_frame_contour,
         x_coord_ref,
         y_coord_ref,
+        z_coord_ref,
         1.0, // Step size in degrees
+        &centerline.points[0],
     );
+
     println!("Optimal rotation angle: {:.2} degrees", optimal_angle);
     rotate_contours_around_z(&mut reference_mesh, optimal_angle);
 
@@ -346,7 +415,7 @@ pub fn create_centerline_aligned_meshes(
         for i in start_index..=(interpolation_steps - 1) {
             let obj_filename = format!("{}/{}_{:03}_{}.obj", input_dir, prefix, i, state);
             let mut mesh = read_obj_mesh(&obj_filename)?;
-            rotate_contours_around_z(&mut mesh, FIXED_ROTATION_DEG);
+            rotate_contours_around_z(&mut mesh, optimal_angle);
 
             // Apply transformation for each frame in the mesh.
             for (frame_index, contours) in mesh.iter_mut() {

@@ -52,6 +52,7 @@ pub fn smooth_contours(contours: &[(u32, Vec<ContourPoint>)]) -> Vec<(u32, Vec<C
                 x: avg_x,
                 y: avg_y,
                 z: curr_pt.z,
+                aortic: curr_pt.aortic,
             };
             new_points.push(smoothed_point);
         }

@@ -14,6 +14,9 @@ pub struct ContourPoint {
     pub x: f64,
     pub y: f64,
     pub z: f64,
+    
+    #[serde(default)]
+    pub aortic: bool,
 }
 
 impl ContourPoint {
@@ -37,6 +40,26 @@ impl ContourPoint {
         }
         Ok(points)
     }
+
+    pub fn read_reference_point<P: AsRef<Path>>(path: P) -> Result<ContourPoint, Box<dyn Error>> {
+        let file = File::open(path)?;
+        let mut rdr = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .delimiter(b'\t')
+            .from_reader(file);
+    
+        for result in rdr.records() {
+            match result {
+                Ok(record) => match record.deserialize(None) {
+                    Ok(point) => return Ok(point),
+                    Err(e) => return Err(Box::new(e)),
+                },
+                Err(e) => return Err(Box::new(e)),
+            }
+        }
+    
+        Err("No valid reference point found in file".into())
+    }    
 
     pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
         // Map to store unique frame indices and one associated z coordinate per frame.
@@ -69,10 +92,19 @@ impl ContourPoint {
                     x,
                     y,
                     z,
+                    aortic: false,
                 });
             }
         }
         catheter_points
+    }
+
+    /// Computes the Euclidean distance between two contour points.
+    pub fn distance_to(&self, other: &ContourPoint) -> f64 {
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
+        let dz = self.z - other.z;
+        (dx * dx + dy * dy + dz * dz).sqrt()
     }
 }
 
@@ -140,6 +172,7 @@ pub fn read_centerline_txt(path: &str) -> Result<Vec<ContourPoint>, Box<dyn Erro
                     x,
                     y,
                     z,
+                    aortic: false,
                 });
             }
             Err(e) => eprintln!("Skipping invalid row: {:?}", e),
@@ -319,6 +352,7 @@ pub fn read_obj_mesh(filename: &str) -> Result<Vec<(u32, Vec<ContourPoint>)>, Bo
                     x,
                     y,
                     z,
+                    aortic: false,
                 });
             }
         } else if trimmed.starts_with("f ") && points_per_contour.is_none() {
@@ -400,12 +434,14 @@ mod tests {
                         x: 0.0,
                         y: 0.0,
                         z: 0.0,
+                        aortic: false,
                     },
                     ContourPoint {
                         frame_index: 0,
                         x: 1.0,
                         y: 0.0,
                         z: 0.0,
+                        aortic: false,
                     },
                 ],
             ),
@@ -417,12 +453,14 @@ mod tests {
                         x: 0.0,
                         y: 0.0,
                         z: 1.0,
+                        aortic: false,
                     },
                     ContourPoint {
                         frame_index: 1,
                         x: 1.0,
                         y: 0.0,
                         z: 1.0,
+                        aortic: false,
                     },
                 ],
             ),

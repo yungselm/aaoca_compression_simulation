@@ -290,6 +290,7 @@ fn resample_contours_with_reference_z(
                     x: pt.x,
                     y: pt.y,
                     z: target_z,
+                    aortic: pt.aortic,
                 })
                 .collect();
             new_contours.push((j as u32, new_points));
@@ -314,6 +315,7 @@ fn resample_contours_with_reference_z(
                     x: pt0.x * (1.0 - t) + pt1.x * t,
                     y: pt0.y * (1.0 - t) + pt1.y * t,
                     z: target_z,
+                    aortic: pt0.aortic,
                 })
                 .collect();
             new_contours.push((j as u32, new_points));

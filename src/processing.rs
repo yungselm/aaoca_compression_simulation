@@ -31,24 +31,28 @@ pub fn process_case(
     // === Process Diastolic Contours ===
     println!("--- Processing {} Diastole ---", case_name);
     let diastole_path = Path::new(input_dir).join("diastolic_contours.csv");
+    let dia_ref_path = Path::new(input_dir).join("diastolic_reference_points.csv");
     let diastole_points = ContourPoint::read_contour_data(diastole_path.to_str().unwrap())?;
     let diastole_catheter = ContourPoint::create_catheter_points(&diastole_points);
+    let diastole_reference = ContourPoint::read_reference_point(dia_ref_path.to_str().unwrap())?;
 
     let mut diastole_contours =
-        Contour::create_contours(diastole_points, steps_best_rotation, range_rotation_rad);
+        Contour::create_contours(diastole_points, steps_best_rotation, range_rotation_rad, &diastole_reference);
     let mut diastole_catheter_contours =
-        Contour::create_contours(diastole_catheter, steps_best_rotation, range_rotation_rad);
+        Contour::create_contours(diastole_catheter, steps_best_rotation, range_rotation_rad, &diastole_reference);
 
     // === Process Systolic Contours ===
     println!("--- Processing {} Systole ---", case_name);
     let systole_path = Path::new(input_dir).join("systolic_contours.csv");
+    let sys_ref_path = Path::new(input_dir).join("systolic_reference_points.csv");
     let systole_points = ContourPoint::read_contour_data(systole_path.to_str().unwrap())?;
     let systole_catheter = ContourPoint::create_catheter_points(&systole_points);
+    let systole_reference = ContourPoint::read_reference_point(sys_ref_path.to_str().unwrap())?;
 
     let mut systole_contours =
-        Contour::create_contours(systole_points, steps_best_rotation, range_rotation_rad);
+        Contour::create_contours(systole_points, steps_best_rotation, range_rotation_rad, &systole_reference);
     let mut systole_catheter_contours =
-        Contour::create_contours(systole_catheter, steps_best_rotation, range_rotation_rad);
+        Contour::create_contours(systole_catheter, steps_best_rotation, range_rotation_rad, &systole_reference);
 
     // Align systolic contours to the diastolic reference.
     let diastolic_ref_centroid = Contour::compute_centroid(&diastole_contours[0].1);
@@ -235,55 +239,6 @@ pub fn process_case(
     Ok(())
 }
 
-// pub fn find_best_rotation_all(
-//     diastole_contours: &[(u32, Vec<ContourPoint>)],
-//     systole_contours: &[(u32, Vec<ContourPoint>)],
-//     steps: usize,
-//     range: f64,
-// ) -> f64 {
-//     let steps = steps;
-//     let range = range;
-//     let increment = (2.0 * range) / steps as f64;
-
-//     (0..=steps)
-//         .into_par_iter()
-//         .map(|i| {
-//             let angle = -range + i as f64 * increment;
-//             let total_distance: f64 = diastole_contours
-//                 .par_iter()
-//                 .zip(systole_contours.par_iter())
-//                 .map(|((d_id, d_contour), (s_id, s_contour))| {
-//                     assert_eq!(d_id, s_id, "Mismatched contour IDs");
-//                     // Rotate each point in systole contour around reference centroid
-//                     let rotated_s_contour: Vec<ContourPoint> = s_contour
-//                         .iter()
-//                         .map(|p| {
-//                             let x = p.x * angle.cos() - p.y * angle.sin();
-//                             let y = p.x * angle.sin() + p.y * angle.cos();
-//                             ContourPoint { x, y, ..*p }
-//                         })
-//                         .collect();
-//                     // Compute Hausdorff distance between corresponding contours
-//                     Contour::hausdorff_distance(d_contour, &rotated_s_contour)
-//                 })
-//                 .sum();
-//             let avg_distance = total_distance / diastole_contours.len() as f64;
-//             (angle, avg_distance);
-//             println!(
-//                 "Angle: {:.3} rad, Avg Distance: {:.3}",
-//                 angle, avg_distance
-//             );
-//             (angle, avg_distance)
-//         })
-//         .min_by(|a, b| {
-//             a.1.partial_cmp(&b.1)
-//                 .unwrap_or(std::cmp::Ordering::Equal)
-//         })
-//         .map(|(angle, _)| angle)
-//         .unwrap_or(0.0)
-// }
-
-/// Best rotation angles per stack, using weights for lower
 pub fn find_best_rotation_all(
     diastole_contours: &[(u32, Vec<ContourPoint>)],
     systole_contours: &[(u32, Vec<ContourPoint>)],
@@ -298,17 +253,12 @@ pub fn find_best_rotation_all(
         .into_par_iter()
         .map(|i| {
             let angle = -range + i as f64 * increment;
-            // For each angle, compute the weighted total distance and the sum of weights.
-            let (weighted_total, total_weight): (f64, f64) = diastole_contours
+            let total_distance: f64 = diastole_contours
                 .par_iter()
                 .zip(systole_contours.par_iter())
                 .map(|((d_id, d_contour), (s_id, s_contour))| {
                     assert_eq!(d_id, s_id, "Mismatched contour IDs");
-                    // Define a weight based on the contour id.
-                    // For example, using 1/(id+1) gives lower ids higher weight.
-                    let weight = 1.0 / ((*d_id as f64) + 1.0);
-                    
-                    // Rotate each point in the systole contour.
+                    // Rotate each point in systole contour around reference centroid
                     let rotated_s_contour: Vec<ContourPoint> = s_contour
                         .iter()
                         .map(|p| {
@@ -317,28 +267,14 @@ pub fn find_best_rotation_all(
                             ContourPoint { x, y, ..*p }
                         })
                         .collect();
-                    
-                    // Compute the Hausdorff distance between corresponding contours.
-                    let distance = Contour::hausdorff_distance(d_contour, &rotated_s_contour);
-                    
-                    (weight * distance, weight)
+                    // Compute Hausdorff distance between corresponding contours
+                    Contour::hausdorff_distance(d_contour, &rotated_s_contour)
                 })
-                .reduce(
-                    || (0.0, 0.0),
-                    |(w_total_a, total_weight_a), (w_total_b, total_weight_b)| {
-                        (w_total_a + w_total_b, total_weight_a + total_weight_b)
-                    },
-                );
-            
-            // Calculate the weighted average distance.
-            let avg_distance = if total_weight > 0.0 {
-                weighted_total / total_weight
-            } else {
-                0.0
-            };
-
+                .sum();
+            let avg_distance = total_distance / diastole_contours.len() as f64;
+            (angle, avg_distance);
             println!(
-                "Angle: {:.3} rad, Weighted Avg Distance: {:.3}",
+                "Angle: {:.3} rad, Avg Distance: {:.3}",
                 angle, avg_distance
             );
             (angle, avg_distance)
