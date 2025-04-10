@@ -15,9 +15,9 @@ run_centerline_alignment = true
 
 [settings]
 interpolation_steps = 30
-x_coord_ref = 11.5986
-y_coord_ref = -200.1742
-z_coord_ref = 1750
+x_coord_ref = 9.5840
+y_coord_ref = -201.3643
+z_coord_ref = 1750.4165
 steps_best_rotation = 300
 # range_rotation_rad = 1.05 # +/- 60 degrees
 range_rotation_rad = 1.57 # +/- 90 degrees

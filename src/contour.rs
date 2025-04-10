@@ -373,16 +373,25 @@ impl Contour {
         (farthest_pair, max_dist)
     }
 
-    /// Find the closest opposite points
+    /// Find the closest opposite points on a contour, where "opposite" means a point
+    /// and the point halfway around the contour vector (e.g., 0 with n/2, 1 with n/2+1, etc.).
+    /// If the number of points in the contour is odd, the function will ignore the last point.
     pub fn find_closest_opposite(
         contour: &[ContourPoint],
     ) -> ((&ContourPoint, &ContourPoint), f64) {
-        let mut min_dist = f64::MAX;
-        let mut closest_pair = (&contour[0], &contour[0]);
-
         let n = contour.len();
-        for i in 0..n / 2 {
-            let j = n - 1 - i; // Opposite index of i
+        // If odd, ignore the last point
+        let effective_n = if n % 2 == 0 { n } else { n - 1 };
+        if effective_n < 2 {
+            panic!("Not enough points to evaluate");
+        }
+        
+        let half = effective_n / 2;
+        let mut min_dist = f64::MAX;
+        let mut closest_pair = (&contour[0], &contour[half]);
+
+        for i in 0..half {
+            let j = i + half; // Directly opposite index (ignoring the extra odd element)
             let dx = contour[i].x - contour[j].x;
             let dy = contour[i].y - contour[j].y;
             let dist = (dx * dx + dy * dy).sqrt(); // Euclidean distance
@@ -392,7 +401,6 @@ impl Contour {
                 closest_pair = (&contour[i], &contour[j]);
             }
         }
-
         (closest_pair, min_dist)
     }
 }

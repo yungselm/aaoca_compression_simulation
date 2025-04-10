@@ -93,10 +93,11 @@ fn find_optimal_rotation(
     while angle_deg < 360.0 {
         let rotated = rotate_single_contour_around_z(contour, angle_deg);
 
-        let mut temp_frame = ContourFrame::from_contour(0, contour.clone());
+        let mut temp_frame = ContourFrame::from_contour(0, rotated);
         align_frame(&mut temp_frame, centerline_point);
+        let temp_contour = &temp_frame.points;
 
-        let (closest_pair, _) = Contour::find_closest_opposite(&rotated);
+        let (closest_pair, _) = Contour::find_closest_opposite(temp_contour);
         
         // Select the point where aortic is true.
         let p = if closest_pair.0.aortic {
@@ -107,6 +108,7 @@ fn find_optimal_rotation(
 
         let p_point = Point3::new(p.x, p.y, p.z);
         let distance = nalgebra::distance(&p_point, &target);
+        println!("angle: {:?}, distance: {:?}", angle_deg, distance);
 
         if distance < min_distance {
             min_distance = distance;
