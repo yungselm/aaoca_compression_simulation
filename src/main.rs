@@ -70,6 +70,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.settings.x_coord_ref,
             config.settings.y_coord_ref,
             config.settings.z_coord_ref,
+            config.settings.x_coord_upper,
+            config.settings.y_coord_upper,
+            config.settings.z_coord_upper,
+            config.settings.x_coord_lower,
+            config.settings.y_coord_lower,
+            config.settings.z_coord_lower,            
         )?;
         create_centerline_aligned_meshes(
             "stress",
@@ -80,6 +86,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.settings.x_coord_ref,
             config.settings.y_coord_ref,
             config.settings.z_coord_ref,
+            config.settings.x_coord_upper,
+            config.settings.y_coord_upper,
+            config.settings.z_coord_upper,
+            config.settings.x_coord_lower,
+            config.settings.y_coord_lower,
+            config.settings.z_coord_lower,  
         )?;
     }
     Ok(())

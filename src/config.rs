@@ -27,6 +27,12 @@ pub struct SettingsConfig {
     pub x_coord_ref: f64,
     pub y_coord_ref: f64,
     pub z_coord_ref: f64,
+    pub x_coord_upper: f64,
+    pub y_coord_upper: f64, 
+    pub z_coord_upper: f64,
+    pub x_coord_lower: f64,
+    pub y_coord_lower: f64, 
+    pub z_coord_lower: f64,
     pub steps_best_rotation: usize,
     pub range_rotation_rad: f64,
 }

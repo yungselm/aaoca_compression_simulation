@@ -39,41 +39,6 @@ fn rotate_single_contour_around_z(contour: &[ContourPoint], degrees: f64) -> Vec
         .collect()
 }
 
-// /// Finds the optimal rotation angle by minimizing the distance between the closest opposite point
-// /// and the reference coordinate.
-// fn find_optimal_rotation(
-//     contour: &[ContourPoint],
-//     target_x: f64,
-//     target_y: f64,
-//     angle_step: f64,
-// ) -> f64 {
-//     let mut best_angle = 0.0;
-//     let mut min_distance = f64::MAX;
-
-//     let mut angle_deg = 0.0;
-//     while angle_deg < 360.0 {
-//         let rotated = rotate_single_contour_around_z(contour, angle_deg);
-//         let (closest_pair, _) = Contour::find_closest_opposite(&rotated);
-        
-//         // Select the point where aortic is true.
-//         let p = if closest_pair.0.aortic {
-//             closest_pair.0
-//         } else {
-//             closest_pair.1
-//         };
-
-//         let distance = ((p.x - target_x).powi(2) + (p.y - target_y).powi(2)).sqrt();
-
-//         if distance < min_distance {
-//             min_distance = distance;
-//             best_angle = angle_deg;
-//         }
-//         angle_deg += angle_step;
-//     }
-
-//     best_angle
-// }
-
 /// Finds the optimal rotation angle by minimizing the distance between the closest opposite point
 /// and the reference coordinate.
 fn find_optimal_rotation(
@@ -81,37 +46,69 @@ fn find_optimal_rotation(
     target_x: f64,
     target_y: f64,
     target_z: f64,
+    x_coord_upper: f64,
+    y_coord_upper: f64, 
+    z_coord_upper: f64,
+    x_coord_lower: f64,
+    y_coord_lower: f64, 
+    z_coord_lower: f64,
     angle_step: f64,
     centerline_point: &CenterlinePoint
 ) -> f64 {
-    let target = Point3::new(target_x, target_y, target_z);
+    let target_aortic = Point3::new(target_x, target_y, target_z);
+    let target_upper = Point3::new(x_coord_upper, y_coord_upper, z_coord_upper);
+    let target_lower = Point3::new(x_coord_lower, y_coord_lower, z_coord_lower);
 
     let mut best_angle = 0.0;
-    let mut min_distance = f64::MAX;
+    let mut min_total_error = f64::MAX;
     
     let mut angle_deg = 0.0;
-    while angle_deg < 360.0 {
+    while angle_deg < 360.0 { // maybe better approach then bruteforce, fix later
         let rotated = rotate_single_contour_around_z(contour, angle_deg);
 
         let mut temp_frame = ContourFrame::from_contour(0, rotated);
         align_frame(&mut temp_frame, centerline_point);
         let temp_contour = &temp_frame.points;
 
+        let (cont_p_upper, cont_p_lower) = if temp_contour[125].aortic {
+            // Aortic on left - swap upper/lower indices
+            (&temp_contour[250], &temp_contour[0])
+        } else {
+            (&temp_contour[0], &temp_contour[250])
+        };
+
         let (closest_pair, _) = Contour::find_closest_opposite(temp_contour);
         
         // Select the point where aortic is true.
-        let p = if closest_pair.0.aortic {
+        let p_aortic = if closest_pair.0.aortic {
             closest_pair.0
         } else {
             closest_pair.1
         };
 
-        let p_point = Point3::new(p.x, p.y, p.z);
-        let distance = nalgebra::distance(&p_point, &target);
-        println!("angle: {:?}, distance: {:?}", angle_deg, distance);
+        // Calculate distances for all three points
+        let d_aortic = nalgebra::distance(
+            &Point3::new(p_aortic.x, p_aortic.y, p_aortic.z),
+            &target_aortic
+        );
+        
+        let d_upper = nalgebra::distance(
+            &Point3::new(cont_p_upper.x, cont_p_upper.y, cont_p_upper.z),
+            &target_upper
+        );
+        
+        let d_lower = nalgebra::distance(
+            &Point3::new(cont_p_lower.x, cont_p_lower.y, cont_p_lower.z),
+            &target_lower
+        );
 
-        if distance < min_distance {
-            min_distance = distance;
+        // Calculate sum of squared errors
+        let total_error = d_aortic.powi(2) + d_upper.powi(2) + d_lower.powi(2);
+
+        println!("angle: {:?}, error: {:?}", angle_deg, total_error);
+
+        if total_error < min_total_error {
+            min_total_error = total_error;
             best_angle = angle_deg;
         }
         angle_deg += angle_step;
@@ -123,7 +120,7 @@ fn find_optimal_rotation(
 #[derive(Debug, Clone, PartialEq)]
 pub struct ContourFrame {
     pub frame_index: u32,
-    pub points: Vec<ContourPoint>, // 500 points per frame
+    pub points: Vec<ContourPoint>, // 501 points per frame
     pub centroid_3d: ContourPoint,
     pub normal: Vector3<f64>,     // Frame's normal vector
     pub translation: Point3<f64>, // Translation from centerline
@@ -319,6 +316,12 @@ pub fn create_centerline_aligned_meshes(
     x_coord_ref: f64,
     y_coord_ref: f64,
     z_coord_ref: f64,
+    x_coord_upper: f64,
+    y_coord_upper: f64, 
+    z_coord_upper: f64,
+    x_coord_lower: f64,
+    y_coord_lower: f64, 
+    z_coord_lower: f64,
 ) -> Result<(), Box<dyn Error>> {
     // ----- Build the common centerline -----
     let raw_centerline = read_centerline_txt(centerline_path)?;
@@ -350,6 +353,12 @@ pub fn create_centerline_aligned_meshes(
         x_coord_ref,
         y_coord_ref,
         z_coord_ref,
+        x_coord_upper,
+        y_coord_upper, 
+        z_coord_upper,
+        x_coord_lower,
+        y_coord_lower, 
+        z_coord_lower,        
         1.0, // Step size in degrees
         &centerline.points[0],
     );
