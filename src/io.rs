@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
+use csv::ReaderBuilder;
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ContourPoint {
@@ -179,6 +180,31 @@ pub fn read_centerline_txt(path: &str) -> Result<Vec<ContourPoint>, Box<dyn Erro
         }
     }
     Ok(points)
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Record {
+    frame: i32,
+    phase: String,
+    #[serde(deserialize_with = "csv::invalid_option")]
+    measurement_1: Option<f64>,
+    #[serde(deserialize_with = "csv::invalid_option")]
+    measurement_2: Option<f64>,
+}
+
+pub fn read_records<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Box<dyn Error>> {
+    let file = File::open(path)?;
+    let mut reader = ReaderBuilder::new()
+        .delimiter(b',')
+        .has_headers(true)
+        .from_reader(file);
+
+    let mut records = Vec::new();
+    for result in reader.deserialize() {
+        let record: Record = result?;
+        records.push(record);
+    }
+    Ok(records)
 }
 
 pub fn write_obj_mesh(

@@ -9,9 +9,9 @@ aligned_rest_path = "output/aligned_rest"
 aligned_stress_path = "output/aligned_stress"
 
 [processing]
-run_process_case = false
+run_process_case = true
 run_phase_comparison = false
-run_centerline_alignment = true
+run_centerline_alignment = false
 
 [settings]
 interpolation_steps = 30

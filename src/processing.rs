@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::contour::Contour;
+use crate::io;
 use crate::io::write_obj_mesh;
 use crate::io::ContourPoint;
 use crate::texture::{
@@ -27,6 +28,10 @@ pub fn process_case(
 ) -> Result<(), Box<dyn Error>> {
     // Create the output directory if it doesn't exist.
     std::fs::create_dir_all(output_dir)?;
+    let records_path = Path::new(input_dir).join("combined_original_manual.csv");
+    println!("records path is: {:?}", &records_path);
+    let records = io::read_records(records_path);
+    println!("records: {:?}", &records);
 
     // === Process Diastolic Contours ===
     println!("--- Processing {} Diastole ---", case_name);
