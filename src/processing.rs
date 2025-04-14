@@ -6,8 +6,8 @@ use std::path::Path;
 
 use crate::contour::Contour;
 use crate::io;
-use crate::io::write_obj_mesh;
-use crate::io::ContourPoint;
+use crate::io::output::write_obj_mesh;
+use crate::io::input::ContourPoint;
 use crate::texture::{
     compute_displacements, compute_uv_coordinates, create_black_texture,
     create_displacement_texture,
@@ -30,7 +30,7 @@ pub fn process_case(
     std::fs::create_dir_all(output_dir)?;
     let records_path = Path::new(input_dir).join("combined_original_manual.csv");
     println!("records path is: {:?}", &records_path);
-    let records = io::read_records(records_path);
+    let records = io::input::read_records(records_path);
     println!("records: {:?}", &records);
 
     // === Process Diastolic Contours ===

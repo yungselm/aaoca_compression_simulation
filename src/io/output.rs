@@ -1,0 +1,234 @@
+use nalgebra::Vector3;
+use serde::Deserialize;
+use std::collections::HashMap;
+use std::error::Error;
+use std::f64::consts::PI;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::{BufReader, BufWriter, Write};
+use std::path::Path;
+use csv::ReaderBuilder;
+
+pub fn write_obj_mesh(
+    contours: &[(u32, Vec<ContourPoint>)],
+    uv_coords: &[(f32, f32)],
+    filename: &str,
+    mtl_filename: &str,
+) -> Result<(), Box<dyn Error>> {
+    let sorted_contours = contours.to_owned();
+
+    // Validation
+    if sorted_contours.len() < 2 {
+        return Err("Need at least two contours to create a mesh.".into());
+    }
+
+    let points_per_contour = sorted_contours[0].1.len();
+    for (_, contour) in &sorted_contours {
+        if contour.len() != points_per_contour {
+            return Err("All contours must have the same number of points.".into());
+        }
+    }
+
+    let file = File::create(filename)?;
+    let mut writer = BufWriter::new(file);
+    let mut vertex_offsets = Vec::new();
+    let mut current_offset = 1;
+    let mut normals = Vec::new();
+
+    // Write vertices and compute normals
+    for (_, contour) in &sorted_contours {
+        vertex_offsets.push(current_offset);
+        let centroid = crate::contour::Contour::compute_centroid(contour);
+        for point in contour {
+            writeln!(writer, "v {} {} {}", point.x, point.y, point.z)?;
+            let dx = point.x - centroid.0;
+            let dy = point.y - centroid.1;
+            let length = (dx * dx + dy * dy).sqrt();
+            let (nx, ny, nz) = if length > 0.0 {
+                (dx / length, dy / length, 0.0)
+            } else {
+                (0.0, 0.0, 0.0)
+            };
+            normals.push((nx * -1.0, ny * -1.0, nz * -1.0));
+            current_offset += 1;
+        }
+    }
+
+    // Validate UV coordinates
+    if uv_coords.len() != current_offset - 1 {
+        return Err(format!(
+            "UV coordinates must match the number of vertices. Expected {}, got {}.",
+            current_offset - 1,
+            uv_coords.len()
+        )
+        .into());
+    }
+
+    // Write material reference
+    writeln!(writer, "mtllib {}", mtl_filename)?;
+    writeln!(writer, "usemtl displacement_material")?;
+
+    // Write UV coordinates
+    for (u, v) in uv_coords {
+        writeln!(writer, "vt {} {}", u, v)?;
+    }
+
+    // Write normals
+    for (nx, ny, nz) in &normals {
+        writeln!(writer, "vn {} {} {}", nx, ny, nz)?;
+    }
+
+    // Write faces with normals and UVs
+    for c in 0..(sorted_contours.len() - 1) {
+        let offset1 = vertex_offsets[c];
+        let offset2 = vertex_offsets[c + 1];
+        for j in 0..points_per_contour {
+            let j_next = (j + 1) % points_per_contour;
+            let v1 = offset1 + j;
+            let v2 = offset1 + j_next;
+            let v3 = offset2 + j;
+            writeln!(writer, "f {0}/{0}/{0} {1}/{1}/{1} {2}/{2}/{2}", v1, v2, v3)?;
+            let v1_t2 = offset2 + j;
+            let v2_t2 = offset1 + j_next;
+            let v3_t2 = offset2 + j_next;
+            writeln!(
+                writer,
+                "f {0}/{0}/{0} {1}/{1}/{1} {2}/{2}/{2}",
+                v1_t2, v2_t2, v3_t2
+            )?;
+        }
+    }
+
+    println!("OBJ mesh with normals written to {}", filename);
+    Ok(())
+}
+
+/// Writes a new OBJ file with updated vertices, normals, UVs, and faces.
+/// This function is used in centerline_alignment.rs to write mesh fitted to CCTA centerline.
+pub fn write_updated_obj_mesh(
+    filename: &str,
+    mtl_filename: &str,
+    vertices: &[(f32, f32, f32)],
+    uv_coords: &[(f32, f32)],
+    normals: &[(f32, f32, f32)],
+    faces: &[(usize, usize, usize)],
+) -> Result<(), Box<dyn Error>> {
+    let file = File::create(filename)?;
+    let mut writer = BufWriter::new(file);
+
+    // Write material reference.
+    writeln!(writer, "mtllib {}", mtl_filename)?;
+    writeln!(writer, "usemtl displacement_material")?;
+
+    // Write vertices.
+    for &(x, y, z) in vertices {
+        writeln!(writer, "v {} {} {}", x, y, z)?;
+    }
+
+    // Write UV coordinates.
+    for &(u, v) in uv_coords {
+        writeln!(writer, "vt {} {}", u, v)?;
+    }
+
+    // Write normals.
+    for &(nx, ny, nz) in normals {
+        writeln!(writer, "vn {} {} {}", nx, ny, nz)?;
+    }
+
+    // Write faces (OBJ indices start at 1).
+    for &(v1, v2, v3) in faces {
+        writeln!(
+            writer,
+            "f {}/{}/{} {}/{}/{} {}/{}/{}",
+            v1 + 1,
+            v1 + 1,
+            v1 + 1,
+            v2 + 1,
+            v2 + 1,
+            v2 + 1,
+            v3 + 1,
+            v3 + 1,
+            v3 + 1
+        )?;
+    }
+    println!("Updated OBJ mesh written to {}", filename);
+    Ok(())
+}
+
+pub fn read_obj_mesh(filename: &str) -> Result<Vec<(u32, Vec<ContourPoint>)>, Box<dyn Error>> {
+    let file = File::open(filename)?;
+    let reader = BufReader::new(file);
+
+    let mut vertices: Vec<ContourPoint> = Vec::new();
+    // This will be set based on the first face encountered.
+    let mut points_per_contour: Option<usize> = None;
+
+    // Loop over every line in the file.
+    for line_result in reader.lines() {
+        let line = line_result?;
+        let trimmed = line.trim();
+        if trimmed.starts_with("v ") {
+            // This is a vertex line. Split on whitespace.
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 4 {
+                let x = parts[1].parse::<f64>()?;
+                let y = parts[2].parse::<f64>()?;
+                let z = parts[3].parse::<f64>()?;
+                // We temporarily set frame_index to 0.
+                vertices.push(ContourPoint {
+                    frame_index: 0,
+                    x,
+                    y,
+                    z,
+                    aortic: false,
+                });
+            }
+        } else if trimmed.starts_with("f ") && points_per_contour.is_none() {
+            // Use the first face line to deduce the number of vertices per contour.
+            // A face line written by write_obj_mesh has the form:
+            // f {v1}/{v1}/{v1} {v2}/{v2}/{v2} {v3}/{v3}/{v3}
+            // where v1 comes from the first contour and v3 from the next.
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 4 {
+                // Extract the first vertex index from parts[1] and parts[3].
+                let v1_str = parts[1].split('/').next().unwrap();
+                let v3_str = parts[3].split('/').next().unwrap();
+                let v1: usize = v1_str.parse()?;
+                let v3: usize = v3_str.parse()?;
+                if v3 > v1 {
+                    points_per_contour = Some(v3 - v1);
+                }
+            }
+        }
+        // Other lines (vt, vn, mtllib, usemtl, etc.) are ignored.
+    }
+
+    // If no face line was found, assume all vertices form one single contour.
+    let points_per_contour = points_per_contour.unwrap_or(vertices.len());
+
+    // Ensure the total number of vertices divides evenly into contours.
+    if vertices.len() % points_per_contour != 0 {
+        return Err(format!(
+            "Vertex count {} is not divisible by points per contour {}.",
+            vertices.len(),
+            points_per_contour
+        )
+        .into());
+    }
+
+    let num_contours = vertices.len() / points_per_contour;
+    let mut contours: Vec<(u32, Vec<ContourPoint>)> = Vec::with_capacity(num_contours);
+
+    for i in 0..num_contours {
+        let start = i * points_per_contour;
+        let end = start + points_per_contour;
+        let mut contour = vertices[start..end].to_vec();
+        // Set the contour's frame_index to the contour index.
+        for point in &mut contour {
+            point.frame_index = i as u32;
+        }
+        contours.push((i as u32, contour));
+    }
+
+    Ok(contours)
+}

@@ -79,7 +79,7 @@ impl Contour {
         Self::rotate_contour(&mut aligned_reference, rotation_to_y, ref_centroid);
         Self::sort_contour_points(&mut aligned_reference);
         let mut aligned_reference_point = reference_point.clone();
-        Self::rotate_point(&mut aligned_reference_point, rotation_to_y, (5.0, 5.0));
+        Self::rotate_point(&mut aligned_reference_point, rotation_to_y, (4.5, 4.5));
 
         let n = aligned_reference.len() / 2;
 
@@ -110,7 +110,7 @@ impl Contour {
                 pt.aortic = true;
             }
             println!("First half (points 0 to 249) marked as aortic.");
-            if first_half_distance < 5.0 {
+            if first_half_distance < 4.5 {
                 rotation_to_y += PI;
                 Self::rotate_contour(&mut aligned_reference, PI, ref_centroid);
             }
@@ -119,7 +119,7 @@ impl Contour {
                 pt.aortic = true;
             }
             println!("Second half (points 250 to 499) marked as aortic.");
-            if second_half_distance < 5.0 {
+            if second_half_distance < 4.5 {
                 rotation_to_y += PI;
                 Self::rotate_contour(&mut aligned_reference, PI, ref_centroid);
             }
