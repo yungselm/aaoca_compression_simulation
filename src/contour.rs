@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::f64::consts::PI;
 
-use crate::io::ContourPoint;
+use crate::io::input::ContourPoint;
 
 #[allow(dead_code)] // used in processing.rs, but warning unused here otherwise
 pub struct Contour {

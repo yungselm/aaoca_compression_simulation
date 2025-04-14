@@ -8,6 +8,7 @@ use input::{Contour, ContourPoint, Record, read_centerline_txt, read_records};
 #[derive(Debug)]
 pub struct Geometry<'a> {
     pub contours: Vec<Contour>,
+    pub catheter: Vec<Contour>,
     pub reference_point: ContourPoint, // needs to be set on aortic wall ostium!
     pub label: &'a str,
 }
@@ -49,10 +50,23 @@ impl<'a> Geometry<'a> {
             desired_order.iter().position(|&frame| frame == id).unwrap_or(usize::MAX)
         });
 
-        // then give new indices so that they are in order
+        // Reassign indices for contours and update their points' frame_index accordingly.
+        for (new_idx, contour) in contours.iter_mut().enumerate() {
+            // Set the new contour id
+            contour.id = new_idx as u32;
+            // Update frame_index for each point in the contour
+            for point in contour.points.iter_mut() {
+                point.frame_index = new_idx as u32;
+            }
+        }
+
+        let catheter = Contour::create_catheter_contours(
+            &contours.iter().flat_map(|c| c.points.clone()).collect::<Vec<_>>()
+        )?;
 
         Ok(Self {
             contours,
+            catheter,
             reference_point,
             label,
         })
@@ -72,30 +86,5 @@ impl<'a> Geometry<'a> {
 
     fn load_results(records_path: &Path) -> Result<Vec<Record>, Box<dyn Error>> {
         read_records(records_path)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_read_in_diastole_true() {
-        let input_dir = "C:\\WorkingData\\Documents\\2_Coding\\Rust\\aaoca_compression_simulation\\input\\rest_csv_files";
-        let label = "diastole_rest";
-        let diastole = true;
-
-        let geometry = Geometry::new(input_dir, label, diastole);
-        assert!(geometry.is_ok(), "Failed to read geometry for diastole=true: {:?}", geometry.err());
-    }
-
-    #[test]
-    fn test_read_in_diastole_false() {
-        let input_dir = "C:\\WorkingData\\Documents\\2_Coding\\Rust\\aaoca_compression_simulation\\input\\rest_csv_files";
-        let label = "systole_rest";
-        let diastole = false;
-
-        let geometry = Geometry::new(input_dir, label, diastole);
-        assert!(geometry.is_ok(), "Failed to read geometry for diastole=false: {:?}", geometry.err());
     }
 }

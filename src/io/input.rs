@@ -51,12 +51,114 @@ impl Contour {
         Ok(contours)
     }
 
+    pub fn create_catheter_contours(
+        points: &Vec<ContourPoint>
+    ) -> Result<Vec<Contour>, Box<dyn Error>> {
+        let catheter_points = ContourPoint::create_catheter_points(&points);
+
+        let mut groups: HashMap<u32, Vec<ContourPoint>> = HashMap::new();
+        for p in catheter_points {
+            groups.entry(p.frame_index).or_default().push(p);
+        }
+
+        let mut contours = Vec::new();
+        for (frame_index, group_points) in groups {
+            let centroid = Self::compute_centroid(&group_points);
+            let aortic_thickness = None;
+            let pulmonary_thickness = None;
+
+            contours.push(Contour {
+            id: frame_index,
+            points: group_points,
+            centroid,
+            aortic_thickness: vec![aortic_thickness],
+            pulmonary_thickness: vec![pulmonary_thickness],
+            });
+        }
+        Ok(contours)
+    }
+
     fn compute_centroid(points: &Vec<ContourPoint>) -> (f64, f64, f64) {
         let (sum_x, sum_y, sum_z) = points
             .iter()
             .fold((0.0, 0.0, 0.0), |(sx, sy, sz), p| (sx + p.x, sy + p.y, sz + p.z));
         let n = points.len() as f64;
         (sum_x / n, sum_y / n, sum_z /n)
+    }
+
+    /// Finds the pair of farthest points in the current contour.
+    pub fn find_farthest_points(&self) -> ((&ContourPoint, &ContourPoint), f64) {
+        let mut max_dist = 0.0;
+        let mut farthest_pair = (&self.points[0], &self.points[0]);
+
+        for i in 0..self.points.len() {
+            for j in i + 1..self.points.len() {
+                let dx = self.points[i].x - self.points[j].x;
+                let dy = self.points[i].y - self.points[j].y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                if dist > max_dist {
+                    max_dist = dist;
+                    farthest_pair = (&self.points[i], &self.points[j]);
+                }
+            }
+        }
+
+        (farthest_pair, max_dist)
+    }
+
+    /// Find the closest opposite points on a contour, where "opposite" means a point
+    /// and the point halfway around the contour vector (e.g., 0 with n/2, 1 with n/2+1, etc.).
+    /// If the number of points in the contour is odd, the function will ignore the last point.
+    pub fn find_closest_opposite(&self) -> ((&ContourPoint, &ContourPoint), f64) {
+        let n = self.points.len();
+        // If odd, ignore the last point
+        let effective_n = if n % 2 == 0 { n } else { n - 1 };
+        if effective_n < 2 {
+            panic!("Not enough points to evaluate");
+        }
+        
+        let half = effective_n / 2;
+        let mut min_dist = f64::MAX;
+        let mut closest_pair = (&self.points[0], &self.points[half]);
+
+        for i in 0..half {
+            let j = i + half; // Directly opposite index (ignoring the extra odd element)
+            let dx = self.points[i].x - self.points[j].x;
+            let dy = self.points[i].y - self.points[j].y;
+            let dist = (dx * dx + dy * dy).sqrt(); // Euclidean distance
+
+            if dist < min_dist {
+                min_dist = dist;
+                closest_pair = (&self.points[i], &self.points[j]);
+            }
+        }
+        (closest_pair, min_dist)
+    }
+
+    /// Rotates all points in a contour about a center.
+    pub fn rotate_contour(&mut self, angle: f64) {
+        for p in self.points.iter_mut() {
+            let rotated = ContourPoint::rotate_point(p, angle, (self.centroid.0, self.centroid.1));
+            p.x = rotated.x;
+            p.y = rotated.y;
+        }
+    }
+
+    /// Sorts contour points in counterclockwise order around the centroid
+    /// and rotates so that the highest y-value is first.
+    pub fn sort_contour_points(&mut self) {
+        self.points.sort_by(|a, b| {
+            let angle_a = (a.y - self.centroid.1).atan2(a.x - self.centroid.0);
+            let angle_b = (b.y - self.centroid.1).atan2(b.x - self.centroid.0);
+            angle_a.partial_cmp(&angle_b).unwrap()
+        });
+        let start_idx = self.points
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        self.points.rotate_left(start_idx);
     }
 }
 
@@ -133,7 +235,7 @@ impl ContourPoint {
         let radius = 0.5;
         let num_points = 20;
 
-        // For each unique frame, generate 10 catheter points around a circle.
+        // For each unique frame, generate 20 catheter points around a circle.
         for frame in frames {
             let z = frame_z[&frame];
             for i in 0..num_points {
@@ -159,6 +261,23 @@ impl ContourPoint {
         let dy = self.y - other.y;
         let dz = self.z - other.z;
         (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+
+    /// Rotates a single point about a given center (cx, cy) by a specified angle (in radians).
+    pub fn rotate_point(p: &ContourPoint, angle: f64, center: (f64, f64)) -> ContourPoint {
+        let (cx, cy) = center;
+        let x = p.x - cx;
+        let y = p.y - cy;
+        let cos_a = angle.cos();
+        let sin_a = angle.sin();
+        ContourPoint {
+            frame_index: p.frame_index,
+            point_index: p.point_index,
+            x: x * cos_a - y * sin_a + cx,
+            y: x * sin_a + y * cos_a + cy,
+            z: p.z,
+            aortic: p.aortic,
+        }
     }
 }
 
