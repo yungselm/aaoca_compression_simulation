@@ -12,7 +12,7 @@ use std::error::Error;
 use centerline_alignment::create_centerline_aligned_meshes;
 use comparison::process_phase_comparison;
 use config::load_config;
-use processing::processing::process_case;
+use processing::geometries::process_case;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let config = load_config("config.toml")?;

@@ -160,6 +160,18 @@ impl Contour {
             .unwrap_or(0);
         self.points.rotate_left(start_idx);
     }
+
+    /// Translates a contour by a given (dx, dy, dz) offset.
+    pub fn translate_contour(&mut self, translation: (f64, f64, f64)) {
+        let (dx, dy, dz) = translation;
+        for p in self.points.iter_mut() {
+            p.x += dx;
+            p.y += dy;
+            p.z += dz;
+        }
+        // Recalculate the centroid
+        self.centroid = Self::compute_centroid(&self.points);
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -264,19 +276,19 @@ impl ContourPoint {
     }
 
     /// Rotates a single point about a given center (cx, cy) by a specified angle (in radians).
-    pub fn rotate_point(p: &ContourPoint, angle: f64, center: (f64, f64)) -> ContourPoint {
+    pub fn rotate_point(&self, angle: f64, center: (f64, f64)) -> ContourPoint {
         let (cx, cy) = center;
-        let x = p.x - cx;
-        let y = p.y - cy;
+        let x = self.x - cx;
+        let y = self.y - cy;
         let cos_a = angle.cos();
         let sin_a = angle.sin();
         ContourPoint {
-            frame_index: p.frame_index,
-            point_index: p.point_index,
+            frame_index: self.frame_index,
+            point_index: self.point_index,
             x: x * cos_a - y * sin_a + cx,
             y: x * sin_a + y * cos_a + cy,
-            z: p.z,
-            aortic: p.aortic,
+            z: self.z,
+            aortic: self.aortic,
         }
     }
 }

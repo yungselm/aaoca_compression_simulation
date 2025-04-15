@@ -1,2 +1,2 @@
-pub mod contour;
-pub mod processing;
+pub mod contours;
+pub mod geometries;
