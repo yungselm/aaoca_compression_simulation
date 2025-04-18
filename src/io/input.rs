@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::f64::consts::PI;
 use std::fs::File;
-use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use csv::ReaderBuilder;
 
@@ -78,7 +77,7 @@ impl Contour {
         Ok(contours)
     }
 
-    fn compute_centroid(points: &Vec<ContourPoint>) -> (f64, f64, f64) {
+    pub fn compute_centroid(points: &Vec<ContourPoint>) -> (f64, f64, f64) {
         let (sum_x, sum_y, sum_z) = points
             .iter()
             .fold((0.0, 0.0, 0.0), |(sx, sy, sz), p| (sx + p.x, sy + p.y, sz + p.z));

@@ -4,6 +4,8 @@ use std::f64::consts::PI;
 use crate::io::input::ContourPoint;
 use crate::io::Geometry;
 
+const MIDDLE_IMAGE: f64 = 4.5; // this is for an IVUS image with 512x512 pixels and 0.01759 pixelsspacing
+
 pub fn align_frames_in_geometry(
     mut geometry: Geometry,
     steps: usize,
@@ -23,7 +25,7 @@ pub fn align_frames_in_geometry(
         .iter()
         .position(|contour| contour.id == reference_index)
         .expect("Reference contour not found");
-    let ref_contour = &mut geometry.contours[reference_pos].clone(); // clone to be extra sure original stays for the moment
+    let ref_contour = &mut geometry.contours.remove(reference_pos);
     println!("Using contour {} as reference.", reference_index);
 
     let ((p1, p2), _dist) = ref_contour.find_farthest_points();
@@ -63,7 +65,7 @@ pub fn align_frames_in_geometry(
             pt.aortic = true;
         }
         println!("First half (points 0 to 249) marked as aortic.");
-        if first_half_distance < 4.5 {
+        if first_half_distance < MIDDLE_IMAGE {
             rotation_to_y += PI;
             rotated_ref.rotate_contour(PI);
         }
@@ -72,14 +74,14 @@ pub fn align_frames_in_geometry(
             pt.aortic = true;
         }
         println!("Second half (points 250 to 499) marked as aortic.");
-        if second_half_distance < 4.5 {
+        if second_half_distance < MIDDLE_IMAGE {
             rotation_to_y += PI;
             rotated_ref.rotate_contour(PI);
         }
     }
 
     // Update the reference contour in geometry with rotated version
-    geometry.contours[reference_pos] = rotated_ref.clone();    
+    geometry.contours.insert(reference_pos, rotated_ref.clone());
 
     // Align each contour to the reference
     for contour in geometry.contours.iter_mut() {

@@ -1,6 +1,8 @@
 use crate::contour::Contour;
-use crate::io::{read_centerline_txt, read_obj_mesh, write_updated_obj_mesh, ContourPoint};
-use crate::io::{Centerline, CenterlinePoint};
+use crate::io::input::{read_centerline_txt, ContourPoint};
+use crate::io::load_geometry::read_obj_mesh;
+use crate::io::output::write_updated_obj_mesh;
+use crate::io::input::{Centerline, CenterlinePoint};
 use nalgebra::{Point3, Rotation3, Unit, Vector3};
 use std::error::Error;
 
@@ -30,6 +32,7 @@ fn rotate_single_contour_around_z(contour: &[ContourPoint], degrees: f64) -> Vec
     contour
         .iter()
         .map(|point| ContourPoint {
+            point_index: point.point_index,
             frame_index: point.frame_index,
             x: point.x * cos_theta - point.y * sin_theta,
             y: point.x * sin_theta + point.y * cos_theta,
@@ -154,6 +157,7 @@ impl ContourFrame {
         });
 
         ContourPoint {
+            point_index: 0,
             frame_index: points.first().map(|p| p.frame_index).unwrap_or(0),
             x: sum_x / count,
             y: sum_y / count,
