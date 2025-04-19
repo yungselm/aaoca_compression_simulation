@@ -1,7 +1,6 @@
 mod centerline_alignment;
 mod comparison;
 mod config;
-mod contour;
 mod io;
 mod processing;
 mod texture;
@@ -19,16 +18,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Run process_case if enabled.
     if config.processing.run_process_case {
-        process_case(
-            "rest",
+        let geometries_rest = process_case(
+            "rest".to_string(),
             &config.general.rest_input_path,
             &config.general.rest_output_path,
             config.settings.interpolation_steps,
             config.settings.steps_best_rotation,
             config.settings.range_rotation_rad,
         )?;
-        process_case(
-            "stress",
+        let geometries_stress = process_case(
+            "stress".to_string(),
             &config.general.stress_input_path,
             &config.general.stress_output_path,
             config.settings.interpolation_steps,

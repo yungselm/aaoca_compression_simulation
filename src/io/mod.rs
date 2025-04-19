@@ -4,7 +4,7 @@ pub mod load_geometry;
 
 use std::error::Error;
 use std::path::Path;
-use input::{Contour, ContourPoint, Record, read_centerline_txt, read_records};
+use input::{Contour, ContourPoint, Record, read_records};
 
 #[derive(Debug, Clone)]
 pub struct Geometry {

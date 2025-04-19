@@ -1,18 +1,12 @@
-use nalgebra::Vector3;
-use serde::Deserialize;
-use std::collections::HashMap;
 use std::error::Error;
-use std::f64::consts::PI;
 use std::fs::File;
-use std::io::BufRead;
-use std::io::{BufReader, BufWriter, Write};
-use std::path::Path;
-use csv::ReaderBuilder;
-use crate::io::input::ContourPoint;
+use std::io::{BufWriter, Write};
+use crate::io::input::Contour;
+
 
 pub fn write_obj_mesh(
-    contours: &[(u32, Vec<ContourPoint>)],
-    uv_coords: &[(f32, f32)],
+    contours: &Vec<Contour>,
+    uv_coords: &[(f64, f64)],
     filename: &str,
     mtl_filename: &str,
 ) -> Result<(), Box<dyn Error>> {
@@ -23,9 +17,9 @@ pub fn write_obj_mesh(
         return Err("Need at least two contours to create a mesh.".into());
     }
 
-    let points_per_contour = sorted_contours[0].1.len();
-    for (_, contour) in &sorted_contours {
-        if contour.len() != points_per_contour {
+    let points_per_contour = sorted_contours[0].points.len();
+    for contour in &sorted_contours {
+        if contour.points.len() != points_per_contour {
             return Err("All contours must have the same number of points.".into());
         }
     }
@@ -37,10 +31,10 @@ pub fn write_obj_mesh(
     let mut normals = Vec::new();
 
     // Write vertices and compute normals
-    for (_, contour) in &sorted_contours {
+    for contour in &sorted_contours {
         vertex_offsets.push(current_offset);
-        let centroid = crate::contour::Contour::compute_centroid(contour);
-        for point in contour {
+        let centroid = &contour.centroid;
+        for point in &contour.points {
             writeln!(writer, "v {} {} {}", point.x, point.y, point.z)?;
             let dx = point.x - centroid.0;
             let dy = point.y - centroid.1;

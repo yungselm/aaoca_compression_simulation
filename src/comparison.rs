@@ -2,7 +2,7 @@ use crate::{
     contour::Contour,
     io::ContourPoint,
     io::{read_obj_mesh, write_obj_mesh},
-    texture::{
+    texture_old::{
         compute_displacements, compute_uv_coordinates, create_black_texture,
         create_displacement_texture,
     },

@@ -1,9 +1,9 @@
 use rayon::prelude::*;
 
 use crate::io::Geometry;
+use crate::processing::contours::hausdorff_distance;
 use std::error::Error;
 
-use crate::contour::Contour;
 use crate::io::input::ContourPoint;
 use super::contours::align_frames_in_geometry;
 
@@ -153,7 +153,7 @@ pub fn find_best_rotation_all(
                         .collect();
 
                     // Compute Hausdorff distance between corresponding contours
-                    Contour::hausdorff_distance(&d_contour.points, &rotated_points)
+                    hausdorff_distance(&d_contour.points, &rotated_points)
                 })
                 .sum();
 
