@@ -3,7 +3,25 @@ use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 
-use crate::io::input::ContourPoint;
+use crate::io::input::{ContourPoint, Contour};
+use crate::io::Geometry;
+
+/// Since process_case() ensures that all aortic points are sorted counterclockwise
+/// and aortic points are always on the right side the original geometry can be rebuild
+/// using simple operations.
+pub fn rebuild_geometry(contour_path: &str, catheter_path: &str) -> Geometry {
+    let mut contours = read_obj_mesh(&contour_path).unwrap();
+    let mut catheter = read_obj_mesh(&catheter_path).unwrap();
+
+    // process contours
+    for (frame_idx, contour) in &contours {
+        // find point with highest y contour.point_index set as 0 then give increasing indices counterclockwise
+        // for all set contour.frame_index to frame_idx
+        
+    }
+
+    todo!()
+}
 
 pub fn read_obj_mesh(filename: &str) -> Result<Vec<(u32, Vec<ContourPoint>)>, Box<dyn Error>> {
     let file = File::open(filename)?;

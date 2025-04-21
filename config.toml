@@ -10,7 +10,6 @@ aligned_stress_path = "output/aligned_stress"
 
 [processing]
 run_process_case = true
-run_phase_comparison = false
 run_centerline_alignment = false
 
 [settings]

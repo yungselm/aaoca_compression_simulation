@@ -17,7 +17,6 @@ pub struct GeneralConfig {
 #[derive(Debug, Deserialize)]
 pub struct ProcessingConfig {
     pub run_process_case: bool,
-    pub run_phase_comparison: bool,
     pub run_centerline_alignment: bool,
 }
 

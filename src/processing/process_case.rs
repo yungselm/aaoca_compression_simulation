@@ -7,20 +7,12 @@ use crate::io::input::{Contour, ContourPoint};
 use crate::texture::write_mtl_geometry;
 use crate::processing::geometries::GeometryPair;
 
-/// Processes a given case by reading diastolic and systolic contours, aligning them,
-/// computing displacements and UV coordinates, and finally writing out the OBJ, MTL, and texture files.
-/// Additionally it can be specified how many interpolation steps should be used to generate the final meshes
-/// used for the animation in blender.
-pub fn process_case(
+pub fn create_geometry_pair(
     case_name: String,
     input_dir: &str,
-    output_dir: &str,
-    interpolation_steps: usize,
     steps_best_rotation: usize,
     range_rotation_rad: f64,
 ) -> Result<GeometryPair, Box<dyn Error>> {
-    std::fs::create_dir_all(output_dir)?;
-    
     let geometries = GeometryPair::new(input_dir, case_name.clone())?;
     let mut geometries = geometries.adjust_z_coordinates();
     geometries = geometries.process_geometry_pair(steps_best_rotation, range_rotation_rad);
@@ -30,8 +22,24 @@ pub fn process_case(
     let dia_geom = dia_geom.smooth_contours();
     let sys_geom = geometries.sys_geom;
     let sys_geom = sys_geom.smooth_contours();
-    
-    let case_name_str = case_name.as_str();
+
+    Ok(GeometryPair { dia_geom: dia_geom, sys_geom: sys_geom })
+}
+
+/// Processes a given case by reading diastolic and systolic contours, aligning them,
+/// computing displacements and UV coordinates, and finally writing out the OBJ, MTL, and texture files.
+/// Additionally it can be specified how many interpolation steps should be used to generate the final meshes
+/// used for the animation in blender.
+pub fn process_case(
+    case_name: &str,
+    geometries: GeometryPair,
+    output_dir: &str,
+    interpolation_steps: usize,
+) -> Result<GeometryPair, Box<dyn Error>> {
+    std::fs::create_dir_all(output_dir)?;
+
+    let dia_geom = geometries.dia_geom;
+    let sys_geom = geometries.sys_geom;
 
     // Interpolate between diastolic and systolic geometries
     let interpolated_geometries = interpolate_contours(
@@ -42,7 +50,7 @@ pub fn process_case(
     let (uv_coords_contours, uv_coords_catheter) = write_mtl_geometry(
         &interpolated_geometries, 
         output_dir,
-        case_name_str);
+        case_name);
 
     // Write the interpolated geometries contours to OBJ files
     for (i, (mesh, uv_coords)) in interpolated_geometries
@@ -70,8 +78,8 @@ pub fn process_case(
     .zip(uv_coords_catheter.iter())    // iterate UVs by reference
     .enumerate()
     {
-        let obj_filename = format!("catheter_{:03}_{}.obj", i, case_name_str);
-        let mtl_filename = format!("catheter_{:03}_{}.mtl", i, case_name_str);
+        let obj_filename = format!("catheter_{:03}_{}.obj", i, case_name);
+        let mtl_filename = format!("catheter_{:03}_{}.mtl", i, case_name);
         let obj_path    = Path::new(output_dir).join(&obj_filename);
         let obj_path_str = obj_path.to_str().unwrap();
     

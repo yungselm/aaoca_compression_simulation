@@ -1,5 +1,4 @@
 mod centerline_alignment;
-mod comparison;
 mod config;
 mod io;
 mod processing;
@@ -9,52 +8,55 @@ mod utils;
 use std::error::Error;
 
 use centerline_alignment::create_centerline_aligned_meshes;
-use comparison::process_phase_comparison;
+use processing::comparison::prepare_geometries_comparison;
 use config::load_config;
-use processing::process_case::process_case;
+use processing::process_case::{create_geometry_pair, process_case};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let config = load_config("config.toml")?;
 
     // Run process_case if enabled.
     if config.processing.run_process_case {
-        let geometries_rest = process_case(
+        let geometries_rest = create_geometry_pair(
             "rest".to_string(),
             &config.general.rest_input_path,
+            config.settings.steps_best_rotation,
+            config.settings.range_rotation_rad,
+        )?;
+        let geometries_rest = process_case(
+            "rest",
+            geometries_rest,
             &config.general.rest_output_path,
             config.settings.interpolation_steps,
+        )?;
+        let geometries_stress = create_geometry_pair(
+            "rest".to_string(),
+            &config.general.stress_input_path,
             config.settings.steps_best_rotation,
             config.settings.range_rotation_rad,
         )?;
         let geometries_stress = process_case(
-            "stress".to_string(),
-            &config.general.stress_input_path,
+            "stress",
+            geometries_stress,
             &config.general.stress_output_path,
             config.settings.interpolation_steps,
-            config.settings.steps_best_rotation,
-            config.settings.range_rotation_rad,
         )?;
-    }
 
-    // Run phase comparison if enabled.
-    if config.processing.run_phase_comparison {
-        process_phase_comparison(
+        let (dia_geom_pair, sys_geom_pair) = prepare_geometries_comparison(
+            geometries_rest,
+            geometries_stress, 
+        );
+        process_case(
             "diastolic",
-            &config.general.rest_output_path,
-            &config.general.stress_output_path,
+            dia_geom_pair,
             &config.general.diastole_comparison_path,
             config.settings.interpolation_steps,
-            config.settings.steps_best_rotation,
-            config.settings.range_rotation_rad,
         )?;
-        process_phase_comparison(
+        process_case(
             "systolic",
-            &config.general.rest_output_path,
-            &config.general.stress_output_path,
+            sys_geom_pair,
             &config.general.systole_comparison_path,
             config.settings.interpolation_steps,
-            config.settings.steps_best_rotation,
-            config.settings.range_rotation_rad,
         )?;
     }
 
