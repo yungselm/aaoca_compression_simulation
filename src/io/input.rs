@@ -1,3 +1,4 @@
+use csv::ReaderBuilder;
 use nalgebra::Vector3;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -5,7 +6,6 @@ use std::error::Error;
 use std::f64::consts::PI;
 use std::fs::File;
 use std::path::Path;
-use csv::ReaderBuilder;
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Contour {
@@ -30,28 +30,28 @@ impl Contour {
         for (frame_index, group_points) in groups {
             let centroid = Self::compute_centroid(&group_points);
             let aortic_thickness = result
-            .iter()
-            .find(|r| r.frame == frame_index as u32)
-            .and_then(|r| r.measurement_1);
+                .iter()
+                .find(|r| r.frame == frame_index as u32)
+                .and_then(|r| r.measurement_1);
 
             let pulmonary_thickness = result
-            .iter()
-            .find(|r| r.frame == frame_index as u32)
-            .and_then(|r| r.measurement_2);
+                .iter()
+                .find(|r| r.frame == frame_index as u32)
+                .and_then(|r| r.measurement_2);
 
             contours.push(Contour {
-            id: frame_index,
-            points: group_points,
-            centroid,
-            aortic_thickness: vec![aortic_thickness],
-            pulmonary_thickness: vec![pulmonary_thickness],
+                id: frame_index,
+                points: group_points,
+                centroid,
+                aortic_thickness: vec![aortic_thickness],
+                pulmonary_thickness: vec![pulmonary_thickness],
             });
         }
         Ok(contours)
     }
 
     pub fn create_catheter_contours(
-        points: &Vec<ContourPoint>
+        points: &Vec<ContourPoint>,
     ) -> Result<Vec<Contour>, Box<dyn Error>> {
         let catheter_points = ContourPoint::create_catheter_points(&points);
 
@@ -67,22 +67,22 @@ impl Contour {
             let pulmonary_thickness = None;
 
             contours.push(Contour {
-            id: frame_index,
-            points: group_points,
-            centroid,
-            aortic_thickness: vec![aortic_thickness],
-            pulmonary_thickness: vec![pulmonary_thickness],
+                id: frame_index,
+                points: group_points,
+                centroid,
+                aortic_thickness: vec![aortic_thickness],
+                pulmonary_thickness: vec![pulmonary_thickness],
             });
         }
         Ok(contours)
     }
 
     pub fn compute_centroid(points: &Vec<ContourPoint>) -> (f64, f64, f64) {
-        let (sum_x, sum_y, sum_z) = points
-            .iter()
-            .fold((0.0, 0.0, 0.0), |(sx, sy, sz), p| (sx + p.x, sy + p.y, sz + p.z));
+        let (sum_x, sum_y, sum_z) = points.iter().fold((0.0, 0.0, 0.0), |(sx, sy, sz), p| {
+            (sx + p.x, sy + p.y, sz + p.z)
+        });
         let n = points.len() as f64;
-        (sum_x / n, sum_y / n, sum_z /n)
+        (sum_x / n, sum_y / n, sum_z / n)
     }
 
     /// Finds the pair of farthest points in the current contour.
@@ -115,7 +115,7 @@ impl Contour {
         if effective_n < 2 {
             panic!("Not enough points to evaluate");
         }
-        
+
         let half = effective_n / 2;
         let mut min_dist = f64::MAX;
         let mut closest_pair = (&self.points[0], &self.points[half]);
@@ -151,7 +151,8 @@ impl Contour {
             let angle_b = (b.y - self.centroid.1).atan2(b.x - self.centroid.0);
             angle_a.partial_cmp(&angle_b).unwrap()
         });
-        let start_idx = self.points
+        let start_idx = self
+            .points
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
@@ -176,18 +177,22 @@ impl Contour {
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ContourPoint {
     pub frame_index: u32,
+
+    #[serde(default, skip_deserializing)]
     pub point_index: u32,
+    
     pub x: f64,
     pub y: f64,
     pub z: f64,
-    
+
     #[serde(default)]
     pub aortic: bool,
 }
 
 impl ContourPoint {
     /// Reads contour points from a CSV file.
-    pub fn read_contour_data<P: AsRef<Path>>(path: P) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
+    pub fn read_contour_data<P: AsRef<Path> + std::fmt::Debug + Clone>(path: P) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
+        let debug_path = path.clone();
         let file = File::open(path)?;
         let mut rdr = csv::ReaderBuilder::new()
             .has_headers(false)
@@ -204,6 +209,7 @@ impl ContourPoint {
                 Err(e) => eprintln!("Skipping invalid row: {:?}", e),
             }
         }
+        println!("Reading from {:?}", debug_path);
         Ok(points)
     }
 
@@ -213,7 +219,7 @@ impl ContourPoint {
             .has_headers(false)
             .delimiter(b'\t')
             .from_reader(file);
-    
+
         for result in rdr.records() {
             match result {
                 Ok(record) => match record.deserialize(None) {
@@ -223,9 +229,9 @@ impl ContourPoint {
                 Err(e) => return Err(Box::new(e)),
             }
         }
-    
+
         Err("No valid reference point found in file".into())
-    }    
+    }
 
     pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
         // Map to store unique frame indices and one associated z coordinate per frame.

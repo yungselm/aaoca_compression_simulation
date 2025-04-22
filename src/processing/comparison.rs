@@ -1,7 +1,7 @@
-use crate::io::input::{Contour, ContourPoint};
-use std::error::Error;
-use crate::io::Geometry;
 use super::geometries::GeometryPair;
+use crate::io::input::{Contour, ContourPoint};
+use crate::io::Geometry;
+use std::error::Error;
 
 pub fn prepare_geometries_comparison(
     geometries_rest: GeometryPair,
@@ -23,6 +23,9 @@ pub fn prepare_geometries_comparison(
         dia_geom: sys_rest,
         sys_geom: sys_stress,
     };
+
+    let dia_pair = dia_pair.trim_geometries_same_length();
+    let sys_pair = sys_pair.trim_geometries_same_length();
 
     (dia_pair, sys_pair)
 }
@@ -59,28 +62,31 @@ fn resample_contours_with_reference_z(
 
     // Determine target spacing from the reference contours.
     // We use the absolute difference between the first two reference contours.
-    let target_spacing = (reference.contours[1].points[0].z - reference.contours[0].points[0].z).abs();
+    let target_spacing =
+        (reference.contours[1].points[0].z - reference.contours[0].points[0].z).abs();
     // Determine the number of new frames to generate.
     let new_frame_count = (total / target_spacing).floor() as usize + 1;
 
     // Generate new contours.
     let new_contours: Vec<Vec<ContourPoint>> = contours_new_z_spacing(
-        n.clone(), 
-        new_frame_count.clone(), 
-        target_spacing.clone(), 
-        start_z.clone(), 
-        direction.clone(), 
-        cum_z.clone(), 
-        &original.contours);
-    
+        n.clone(),
+        new_frame_count.clone(),
+        target_spacing.clone(),
+        start_z.clone(),
+        direction.clone(),
+        cum_z.clone(),
+        &original.contours,
+    );
+
     let new_catheter: Vec<Vec<ContourPoint>> = contours_new_z_spacing(
-        n, 
-        new_frame_count, 
-        target_spacing, 
-        start_z, 
-        direction, 
-        cum_z, 
-        &original.catheter);
+        n,
+        new_frame_count,
+        target_spacing,
+        start_z,
+        direction,
+        cum_z,
+        &original.catheter,
+    );
 
     let new_contours = vec_contour_points_to_contour(new_contours);
     let new_catheter = vec_contour_points_to_contour(new_catheter);
@@ -94,15 +100,15 @@ fn resample_contours_with_reference_z(
     Ok(new_geometry)
 }
 
-
 fn contours_new_z_spacing(
-    n: usize, 
-    new_frame_count: usize, 
-    target_spacing: f64, 
+    n: usize,
+    new_frame_count: usize,
+    target_spacing: f64,
     start_z: f64,
     direction: f64,
     cum_z: Vec<f64>,
-    contours: &Vec<Contour>) -> Vec<Vec<ContourPoint>> {
+    contours: &Vec<Contour>,
+) -> Vec<Vec<ContourPoint>> {
     let mut new_contours = Vec::with_capacity(new_frame_count);
 
     for j in 0..new_frame_count {
@@ -157,7 +163,7 @@ fn contours_new_z_spacing(
                 .collect();
             new_contours.push(new_points);
         }
-    };
+    }
     new_contours
 }
 
@@ -177,5 +183,5 @@ fn vec_contour_points_to_contour(vec_contour: Vec<Vec<ContourPoint>>) -> Vec<Con
 
         contours.push(contour);
     }
-    todo!()
+    contours
 }

@@ -1,10 +1,10 @@
 pub mod input;
-pub mod output;
 pub mod load_geometry;
+pub mod output;
 
+use input::{read_records, Contour, ContourPoint, Record};
 use std::error::Error;
 use std::path::Path;
-use input::{Contour, ContourPoint, Record, read_records};
 
 #[derive(Debug, Clone)]
 pub struct Geometry {
@@ -16,31 +16,34 @@ pub struct Geometry {
 
 impl Geometry {
     /// Creates a new Geometry instance by loading all required data files
-    pub fn new(
-        input_dir: &str,
-        label: String,
-        diastole: bool,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn new(input_dir: &str, label: String, diastole: bool) -> Result<Self, Box<dyn Error>> {
         let label = if diastole {
             format!("{}_diastole", label)
         } else {
             format!("{}_systole", label)
         };
-        
+
         let base_path = Path::new(input_dir);
         let records_path = Path::new(base_path).join("combined_original_manual.csv");
         let (contour_path, reference_path) = if diastole {
-            (Path::new(base_path).join("diastolic_contours.csv"), 
-            Path::new(base_path).join("diastolic_reference_points.csv"))
+            (
+                Path::new(base_path).join("diastolic_contours.csv"),
+                Path::new(base_path).join("diastolic_reference_points.csv"),
+            )
         } else {
-            (Path::new(base_path).join("systolic_contours.csv"), 
-            Path::new(base_path).join("systolic_reference_points.csv"))
+            (
+                Path::new(base_path).join("systolic_contours.csv"),
+                Path::new(base_path).join("systolic_reference_points.csv"),
+            )
         };
-        
+
         // Load core components
         let mut contours = Self::load_contours(&contour_path, &records_path)?;
+        println!("Loaded contours");
         let reference_point = Self::load_reference_point(&reference_path)?;
+        println!("Loaded reference_point");
         let records = Self::load_results(&records_path)?;
+        println!("Loaded results");
 
         // reorder contours by records frame order, first filter only phase == 'D' if diastole true
         // otherwise only phase == 'S'
@@ -48,13 +51,16 @@ impl Geometry {
         let filtered_records: Vec<_> = records
             .into_iter()
             .filter(|r| r.phase == desired_phase)
-            .collect(); 
+            .collect();
 
         // Sort contours to match filtered record frame order
         let desired_order: Vec<u32> = filtered_records.iter().map(|r| r.frame).collect();
         contours.sort_by_key(|c| {
             let id = c.id as u32;
-            desired_order.iter().position(|&frame| frame == id).unwrap_or(usize::MAX)
+            desired_order
+                .iter()
+                .position(|&frame| frame == id)
+                .unwrap_or(usize::MAX)
         });
 
         // Reassign indices for contours and update their points' frame_index accordingly.
@@ -68,8 +74,13 @@ impl Geometry {
         } // new order has now highest index for the ostium
 
         let catheter = Contour::create_catheter_contours(
-            &contours.iter().flat_map(|c| c.points.clone()).collect::<Vec<_>>()
+            &contours
+                .iter()
+                .flat_map(|c| c.points.clone())
+                .collect::<Vec<_>>(),
         )?;
+        println!("Created catheter contours");
+        println!("Generating geometry for {:?}", input_dir);
 
         Ok(Self {
             contours,
@@ -79,7 +90,10 @@ impl Geometry {
         })
     }
 
-    fn load_contours(contour_path: &Path, records_path: &Path) -> Result<Vec<Contour>, Box<dyn Error>> {
+    fn load_contours(
+        contour_path: &Path,
+        records_path: &Path,
+    ) -> Result<Vec<Contour>, Box<dyn Error>> {
         let raw_points = ContourPoint::read_contour_data(contour_path)?;
         let results = read_records(records_path)?;
 

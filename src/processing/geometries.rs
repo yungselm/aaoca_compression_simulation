@@ -4,8 +4,8 @@ use crate::io::Geometry;
 use crate::processing::contours::hausdorff_distance;
 use std::error::Error;
 
-use crate::io::input::ContourPoint;
 use super::contours::align_frames_in_geometry;
+use crate::io::input::ContourPoint;
 
 pub struct GeometryPair {
     pub dia_geom: Geometry,
@@ -15,28 +15,29 @@ pub struct GeometryPair {
 impl GeometryPair {
     pub fn new(input_dir: &str, label: String) -> Result<GeometryPair, Box<dyn Error>> {
         let dia_geom = Geometry::new(input_dir, label.clone(), true)?;
+        println!("geometry pair: diastolic geometry generated");
         let sys_geom = Geometry::new(input_dir, label, false)?;
+        println!("geometry pair: systolic geometry generated");
         Ok(GeometryPair { dia_geom, sys_geom })
     }
 
     /// aligns the frames in each geomtery by rotating them based on best Hausdorff distance
-    /// then translates systolic contours to the diastolic contours, aligns z-coordinates and 
+    /// then translates systolic contours to the diastolic contours, aligns z-coordinates and
     /// trims them to same length.
     pub fn process_geometry_pair(
-        self, 
+        self,
         steps_best_rotation: usize,
         range_rotation_rad: f64,
     ) -> GeometryPair {
-        let diastole = align_frames_in_geometry(self.dia_geom, 
-            steps_best_rotation,
-            range_rotation_rad);
-        let mut systole = align_frames_in_geometry(self.sys_geom, 
-            steps_best_rotation, 
-            range_rotation_rad);
-    
+        let diastole =
+            align_frames_in_geometry(self.dia_geom, steps_best_rotation, range_rotation_rad);
+        let mut systole =
+            align_frames_in_geometry(self.sys_geom, steps_best_rotation, range_rotation_rad);
+
         let diastolic_ref_centroid = diastole.contours[0].centroid;
-    
-        for ref mut contour in systole.contours
+
+        for ref mut contour in systole
+            .contours
             .iter_mut()
             .chain(systole.catheter.iter_mut())
         {
@@ -47,10 +48,11 @@ impl GeometryPair {
             );
             contour.translate_contour((t.0, t.1, 0.0))
         }
-    
+
         // Adjust the z-coordinates of systolic contours. (later replaceed by adjust_z_coordinates)
         let z_translation = diastole.contours[0].centroid.2 - systole.contours[0].centroid.2;
-        for ref mut contour in systole.contours
+        for ref mut contour in systole
+            .contours
             .iter_mut()
             .chain(systole.catheter.iter_mut())
         {
@@ -59,25 +61,31 @@ impl GeometryPair {
             }
             contour.centroid.2 += z_translation;
         }
-    
+
         let best_rotation_angle = find_best_rotation_all(
             &diastole,
             &systole,
-            steps_best_rotation,   // number of candidate steps (e.g. 200 or 400)
-            range_rotation_rad,    // rotation range (e.g. 1.05 for ~±60°)
+            steps_best_rotation, // number of candidate steps (e.g. 200 or 400)
+            range_rotation_rad,  // rotation range (e.g. 1.05 for ~±60°)
         );
-    
-        for ref mut contour in systole.contours
+
+        for ref mut contour in systole
+            .contours
             .iter_mut()
             .chain(systole.catheter.iter_mut())
         {
             contour.rotate_contour(best_rotation_angle);
         }
-        GeometryPair { dia_geom: diastole, sys_geom: systole }
+        GeometryPair {
+            dia_geom: diastole,
+            sys_geom: systole,
+        }
     }
-    
+
     pub fn adjust_z_coordinates(mut self) -> GeometryPair {
-        let mut z_coords: Vec<f64> = self.dia_geom.contours
+        let mut z_coords: Vec<f64> = self
+            .dia_geom
+            .contours
             .iter()
             .chain(self.sys_geom.contours.iter())
             .map(|contour| contour.centroid.2)
@@ -89,39 +97,35 @@ impl GeometryPair {
 
         let mean_z_coords = z_coords.iter().sum::<f64>() / z_coords.len() as f64;
 
-        self.dia_geom.contours
-        .iter_mut()
-        .chain(self.sys_geom.contours.iter_mut())
-        .chain(self.dia_geom.catheter.iter_mut())
-        .chain(self.sys_geom.catheter.iter_mut())
-        .for_each(|contour| {
-            contour.centroid.2 = (contour.centroid.2 / mean_z_coords).floor() * mean_z_coords;
-            for point in contour.points.iter_mut() {
-                point.z = (point.z / mean_z_coords).floor() * mean_z_coords;
-            }
-        });
+        self.dia_geom
+            .contours
+            .iter_mut()
+            .chain(self.sys_geom.contours.iter_mut())
+            .chain(self.dia_geom.catheter.iter_mut())
+            .chain(self.sys_geom.catheter.iter_mut())
+            .for_each(|contour| {
+                contour.centroid.2 = (contour.centroid.2 / mean_z_coords).floor() * mean_z_coords;
+                for point in contour.points.iter_mut() {
+                    point.z = (point.z / mean_z_coords).floor() * mean_z_coords;
+                }
+            });
         self
     }
 
     pub fn trim_geometries_same_length(mut self) -> GeometryPair {
-        let min_len = std::cmp::min(
-            self.dia_geom.contours.len(), 
-            self.sys_geom.contours.len(),
-        );
-    
+        let min_len = std::cmp::min(self.dia_geom.contours.len(), self.sys_geom.contours.len());
+
         self.dia_geom.contours.truncate(min_len);
         self.sys_geom.contours.truncate(min_len);
-    
-        let min_catheter_len = std::cmp::min(
-            self.dia_geom.catheter.len(),
-            self.sys_geom.catheter.len(),
-        );
-    
+
+        let min_catheter_len =
+            std::cmp::min(self.dia_geom.catheter.len(), self.sys_geom.catheter.len());
+
         self.dia_geom.catheter.truncate(min_catheter_len);
         self.sys_geom.catheter.truncate(min_catheter_len);
-    
+
         self
-    }    
+    }
 }
 
 pub fn find_best_rotation_all(
@@ -136,14 +140,16 @@ pub fn find_best_rotation_all(
         .into_par_iter()
         .map(|i| {
             let angle = -range + i as f64 * increment;
-            let total_distance: f64 = diastole.contours
+            let total_distance: f64 = diastole
+                .contours
                 .par_iter()
                 .zip(systole.contours.par_iter())
                 .map(|(d_contour, s_contour)| {
                     assert_eq!(d_contour.id, s_contour.id, "Mismatched contour IDs");
-                    
+
                     // Rotate each point in systole contour
-                    let rotated_points: Vec<ContourPoint> = s_contour.points
+                    let rotated_points: Vec<ContourPoint> = s_contour
+                        .points
                         .iter()
                         .map(|p| {
                             let x = p.x * angle.cos() - p.y * angle.sin();

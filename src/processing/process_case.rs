@@ -1,11 +1,11 @@
 use std::error::Error;
 use std::path::Path;
 
-use crate::io::Geometry;
-use crate::io::output::write_obj_mesh;
 use crate::io::input::{Contour, ContourPoint};
-use crate::texture::write_mtl_geometry;
+use crate::io::output::write_obj_mesh;
+use crate::io::Geometry;
 use crate::processing::geometries::GeometryPair;
+use crate::texture::write_mtl_geometry;
 
 pub fn create_geometry_pair(
     case_name: String,
@@ -17,13 +17,16 @@ pub fn create_geometry_pair(
     let mut geometries = geometries.adjust_z_coordinates();
     geometries = geometries.process_geometry_pair(steps_best_rotation, range_rotation_rad);
     geometries = geometries.trim_geometries_same_length();
-    
+
     let dia_geom = geometries.dia_geom;
     let dia_geom = dia_geom.smooth_contours();
     let sys_geom = geometries.sys_geom;
     let sys_geom = sys_geom.smooth_contours();
 
-    Ok(GeometryPair { dia_geom: dia_geom, sys_geom: sys_geom })
+    Ok(GeometryPair {
+        dia_geom: dia_geom,
+        sys_geom: sys_geom,
+    })
 }
 
 /// Processes a given case by reading diastolic and systolic contours, aligning them,
@@ -42,31 +45,29 @@ pub fn process_case(
     let sys_geom = geometries.sys_geom;
 
     // Interpolate between diastolic and systolic geometries
-    let interpolated_geometries = interpolate_contours(
-        &dia_geom,
-        &sys_geom,
-        interpolation_steps.clone())?;
+    let interpolated_geometries =
+        interpolate_contours(&dia_geom, &sys_geom, interpolation_steps.clone())?;
+    
+    println!("Number of interpolated geometries created: {:?}", &interpolated_geometries.len());
 
-    let (uv_coords_contours, uv_coords_catheter) = write_mtl_geometry(
-        &interpolated_geometries, 
-        output_dir,
-        case_name);
+    let (uv_coords_contours, uv_coords_catheter) =
+        write_mtl_geometry(&interpolated_geometries, output_dir, case_name);
 
     // Write the interpolated geometries contours to OBJ files
     for (i, (mesh, uv_coords)) in interpolated_geometries
-    .iter()
-    .zip(uv_coords_contours.iter())    // iterate UVs by reference
-    .enumerate()
+        .iter()
+        .zip(uv_coords_contours.iter()) // iterate UVs by reference
+        .enumerate()
     {
         let obj_filename = format!("mesh_{:03}_{}.obj", i, case_name);
         let mtl_filename = format!("mesh_{:03}_{}.mtl", i, case_name);
-        let obj_path    = Path::new(output_dir).join(&obj_filename);
+        let obj_path = Path::new(output_dir).join(&obj_filename);
         let obj_path_str = obj_path.to_str().unwrap();
-    
+
         // borrow mesh.contours and pass your &Vec<(f64,f64)> -> &[…] coerces automatically:
         write_obj_mesh(
-            &mesh.contours,    // ← borrow, don’t move
-            uv_coords,         // ← &Vec<(f64,f64)> coerces to &[(f64,f64)]
+            &mesh.contours, // ← borrow, don’t move
+            uv_coords,      // ← &Vec<(f64,f64)> coerces to &[(f64,f64)]
             obj_path_str,
             &mtl_filename,
         )?;
@@ -74,65 +75,104 @@ pub fn process_case(
 
     // Write the interpolated geometries catheter to OBJ files
     for (i, (mesh, uv_coords)) in interpolated_geometries
-    .iter()
-    .zip(uv_coords_catheter.iter())    // iterate UVs by reference
-    .enumerate()
+        .iter()
+        .zip(uv_coords_catheter.iter()) // iterate UVs by reference
+        .enumerate()
     {
         let obj_filename = format!("catheter_{:03}_{}.obj", i, case_name);
         let mtl_filename = format!("catheter_{:03}_{}.mtl", i, case_name);
-        let obj_path    = Path::new(output_dir).join(&obj_filename);
+        let obj_path = Path::new(output_dir).join(&obj_filename);
         let obj_path_str = obj_path.to_str().unwrap();
-    
+
         // borrow mesh.contours and pass your &Vec<(f64,f64)> -> &[…] coerces automatically:
         write_obj_mesh(
-            &mesh.catheter,    // ← borrow, don’t move
-            uv_coords,         // ← &Vec<(f64,f64)> coerces to &[(f64,f64)]
+            &mesh.catheter, // ← borrow, don’t move
+            uv_coords,      // ← &Vec<(f64,f64)> coerces to &[(f64,f64)]
             obj_path_str,
             &mtl_filename,
         )?;
     }
-    
-    Ok(GeometryPair{
-        dia_geom, 
-        sys_geom,
-    })
+
+    Ok(GeometryPair { dia_geom, sys_geom })
 }
 
 /// Interpolates between two aligned Geometry configurations with number of steps
 /// used to visualize deformation over a cardiac cycle.
 pub fn interpolate_contours(
-    contours_start: &Geometry,
-    contours_end: &Geometry,
+    start: &Geometry,
+    end:   &Geometry,
     steps: usize,
 ) -> Result<Vec<Geometry>, Box<dyn Error>> {
     use std::cmp::min;
+    let n = min(start.contours.len(), end.contours.len());
+    let sc = &start.contours[..n];
+    let ec = &end.contours[..n];
+    let sat = &start.catheter[..n];
+    let eat = &end.catheter[..n];
 
-    // Ensure equal number of contours and matching IDs
-    let n = min(contours_start.contours.len(), contours_end.contours.len());
-    let start_contours = &contours_start.contours[0..n];
-    let end_contours = &contours_end.contours[0..n];
+    let mut geoms = Vec::with_capacity(steps + 2);
+    // First frame
+    geoms.push(start.clone());
 
-    let start_catheter = &contours_start.catheter[0..n];
-    let end_catheter = &contours_end.catheter[0..n];
+    for step in 0..steps {
+        let t = step as f64 / (steps - 1) as f64;
 
-    let lumen_contours = interpolate_points(start_contours, end_contours, steps, n);
-    let catheter_contours = interpolate_points(start_catheter, end_catheter, steps, n);
+        let contours = sc.iter().zip(ec).map(|(s, e)| Contour {
+            id: s.id,
+            points: s.points.iter().zip(&e.points)
+                .map(|(ps, pe)| ContourPoint {
+                    frame_index: ps.frame_index,
+                    point_index: ps.point_index, // or reassign later
+                    x: ps.x * (1.0 - t) + pe.x * t,
+                    y: ps.y * (1.0 - t) + pe.y * t,
+                    z: ps.z * (1.0 - t) + pe.z * t,
+                    aortic: ps.aortic,
+                })
+                .collect(),
+            centroid: (
+                s.centroid.0 * (1.0 - t) + e.centroid.0 * t,
+                s.centroid.1 * (1.0 - t) + e.centroid.1 * t,
+                s.centroid.2 * (1.0 - t) + e.centroid.2 * t,
+            ),
+            aortic_thickness: interpolate_thickness(&s.aortic_thickness, &e.aortic_thickness, t),
+            pulmonary_thickness: interpolate_thickness(&s.pulmonary_thickness, &e.pulmonary_thickness, t),
+        }).collect();
 
-    let mut interpolated_geometries = Vec::with_capacity(steps);
+        let catheter = sat.iter().zip(eat).map(|(s, e)| {
+            // same inner logic, or extract into a helper…
+            Contour { 
+                id: s.id,
+                points: s.points.iter().zip(&e.points)
+                .map(|(ps, pe)| ContourPoint {
+                    frame_index: ps.frame_index,
+                    point_index: ps.point_index,
+                    x: ps.x * (1.0 - t) + pe.x * t,
+                    y: ps.y * (1.0 - t) + pe.y * t,
+                    z: ps.z * (1.0 - t) + pe.z * t,
+                    aortic: ps.aortic,
+                })
+                .collect(),
+                centroid: (
+                    s.centroid.0 * (1.0 - t) + e.centroid.0 * t,
+                    s.centroid.1 * (1.0 - t) + e.centroid.1 * t,
+                    s.centroid.2 * (1.0 - t) + e.centroid.2 * t,
+                ),
+                aortic_thickness: Vec::new(),
+                pulmonary_thickness: Vec::new(),
+            }
+        }).collect();
 
-    for (step, (contour, catheter)) in lumen_contours.iter().zip(catheter_contours).enumerate() {
-        interpolated_geometries.push(Geometry {
-            contours: contour.clone(),
-            catheter: catheter.clone(),
-            reference_point: contours_start.reference_point.clone(), // reference point is fix
-            label: format!("{}_inter_{}", contours_start.label, step),
-        })
+        geoms.push( Geometry {
+            contours,
+            catheter,
+            reference_point: start.reference_point.clone(),
+            label: format!("{}_inter_{}", start.label, step),
+        } );
     }
-    // Ensure diastole and systole are included in the interpolated_geometries
-    interpolated_geometries.insert(0, contours_start.clone());
-    interpolated_geometries.push(contours_end.clone());
 
-    Ok(interpolated_geometries)
+    // Last frame
+    geoms.push(end.clone());
+    Ok(geoms)
 }
 
 /// Helper function to interpolate Vec<Contour>
@@ -157,7 +197,8 @@ fn interpolate_points(
             }
 
             // Interpolate points between contours
-            let interp_points: Vec<ContourPoint> = start_contour.points
+            let interp_points: Vec<ContourPoint> = start_contour
+                .points
                 .iter()
                 .zip(end_contour.points.iter())
                 .map(|(p_start, p_end)| {
@@ -182,28 +223,33 @@ fn interpolate_points(
                     start_contour.centroid.1 * (1.0 - t) + end_contour.centroid.1 * t,
                     start_contour.centroid.2 * (1.0 - t) + end_contour.centroid.2 * t,
                 ),
-                aortic_thickness: interpolate_thickness(&start_contour.aortic_thickness, &end_contour.aortic_thickness, t),
-                pulmonary_thickness: interpolate_thickness(&start_contour.pulmonary_thickness, &end_contour.pulmonary_thickness, t),
+                aortic_thickness: interpolate_thickness(
+                    &start_contour.aortic_thickness,
+                    &end_contour.aortic_thickness,
+                    t,
+                ),
+                pulmonary_thickness: interpolate_thickness(
+                    &start_contour.pulmonary_thickness,
+                    &end_contour.pulmonary_thickness,
+                    t,
+                ),
             };
 
             intermediate_contours.push(interp_contour);
         }
     }
 
-    Ok(intermediate_contours)    
+    Ok(intermediate_contours)
 }
 
 /// Helper function to interpolate thickness values
-fn interpolate_thickness(
-    start: &[Option<f64>],
-    end: &[Option<f64>],
-    t: f64
-) -> Vec<Option<f64>> {
-    start.iter()
+fn interpolate_thickness(start: &[Option<f64>], end: &[Option<f64>], t: f64) -> Vec<Option<f64>> {
+    start
+        .iter()
         .zip(end.iter())
         .map(|(s, e)| match (s, e) {
             (Some(s_val), Some(e_val)) => Some(s_val * (1.0 - t) + e_val * t),
-            _ => None
+            _ => None,
         })
         .collect()
 }

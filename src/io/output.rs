@@ -1,8 +1,7 @@
+use crate::io::input::Contour;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use crate::io::input::Contour;
-
 
 pub fn write_obj_mesh(
     contours: &Vec<Contour>,
@@ -149,5 +148,3 @@ pub fn write_updated_obj_mesh(
     println!("Updated OBJ mesh written to {}", filename);
     Ok(())
 }
-
-

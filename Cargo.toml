@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 csv = "1.1"
-serde = { version = "1.0", features = ["derive"]}
-image = "*"
-rand = "0.8.5"
+serde = { version = "1.0.219", features = ["derive"]}
+image = "0.25.5"
+rand = "0.9.1"
 nalgebra = "*"
-toml = "0.5.6"
+toml = "0.8.20"
 rayon = "1.7.1"

@@ -1,10 +1,13 @@
 pub mod texture;
 
-use std::path::Path;
-use::std::io::Write;
-use::std::fs::File;
-use texture::{compute_displacements, compute_uv_coordinates, create_displacement_texture, create_black_texture};
 use crate::io::Geometry;
+use ::std::fs::File;
+use ::std::io::Write;
+use std::path::Path;
+use texture::{
+    compute_displacements, compute_uv_coordinates, create_black_texture,
+    create_displacement_texture,
+};
 
 pub fn write_mtl_geometry(
     geometries_to_process: &Vec<Geometry>,
@@ -16,8 +19,10 @@ pub fn write_mtl_geometry(
     // calculate max displacements, since all meshes in between are interpolated
     // meshes, it is enough to compare first and last element of Vec<Geometry> and
     // then extract the max value needed to normalize.
-    let disp = compute_displacements(&geometries_to_process[0], 
-        geometries_to_process.last().unwrap());
+    let disp = compute_displacements(
+        &geometries_to_process[0],
+        geometries_to_process.last().unwrap(),
+    );
     let max_disp = disp.iter().cloned().reduce(f64::max).unwrap();
 
     let mut uv_coords_contours = Vec::new();
@@ -31,7 +36,7 @@ pub fn write_mtl_geometry(
         } else {
             0
         };
-    
+
         let displacements = compute_displacements(&mesh, &reference_contours);
 
         // Save the displacement texture.
@@ -43,7 +48,8 @@ pub fn write_mtl_geometry(
             texture_height,
             max_disp,
             texture_path.to_str().unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Write the material file (MTL).
         let mtl_filename = format!("mesh_{:03}_{}.mtl", i, case_name);
@@ -53,7 +59,8 @@ pub fn write_mtl_geometry(
             mtl_file,
             "newmtl displacement_material\nKa 1 1 1\nKd 1 1 1\nmap_Kd {}",
             tex_filename
-        ).unwrap();
+        )
+        .unwrap();
 
         uv_coords_contours.push(uv_coords)
     }
@@ -78,7 +85,8 @@ pub fn write_mtl_geometry(
             texture_width,
             texture_height,
             texture_path.to_str().unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Write the material file (MTL).
         let mtl_filename = format!("catheter_{:03}_{}.mtl", i, case_name);
@@ -89,7 +97,8 @@ pub fn write_mtl_geometry(
             mtl_file,
             "newmtl black_material\nKa 0 0 0\nKd 0 0 0\nmap_Kd {}",
             tex_filename
-        ).unwrap();
+        )
+        .unwrap();
 
         uv_coords_catheter.push(uv_coords)
     }

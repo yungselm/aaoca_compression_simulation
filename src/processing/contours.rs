@@ -6,11 +6,7 @@ use crate::io::Geometry;
 
 const MIDDLE_IMAGE: f64 = 4.5; // this is for an IVUS image with 512x512 pixels and 0.01759 pixelsspacing
 
-pub fn align_frames_in_geometry(
-    mut geometry: Geometry,
-    steps: usize,
-    range: f64,
-) -> Geometry {
+pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64) -> Geometry {
     // Sort contours by frame index.
     geometry.contours.sort_by_key(|contour| contour.id);
 
@@ -20,8 +16,14 @@ pub fn align_frames_in_geometry(
     }
 
     // Use the contour with the highest frame index as reference.
-    let reference_index = geometry.contours.iter().map(|contour| contour.id).max().unwrap();
-    let reference_pos = geometry.contours
+    let reference_index = geometry
+        .contours
+        .iter()
+        .map(|contour| contour.id)
+        .max()
+        .unwrap();
+    let reference_pos = geometry
+        .contours
         .iter()
         .position(|contour| contour.id == reference_index)
         .expect("Reference contour not found");
@@ -48,12 +50,14 @@ pub fn align_frames_in_geometry(
     // --- Begin aortic determination ---
     // We assume there are exactly 500 points; split into two halves: indices 0..249 and 250..499.
     // Compute the cumulative distance for each half from the rotated reference.
-    let first_half_distance: f64 = rotated_ref.points
+    let first_half_distance: f64 = rotated_ref
+        .points
         .iter()
         .take(n)
         .map(|pt| pt.distance_to(&geometry.reference_point))
         .sum();
-    let second_half_distance: f64 = rotated_ref.points
+    let second_half_distance: f64 = rotated_ref
+        .points
         .iter()
         .skip(n)
         .map(|pt| pt.distance_to(&geometry.reference_point))
@@ -104,9 +108,10 @@ pub fn align_frames_in_geometry(
             steps,
             range,
             &contour.centroid,
-        );
+        ); // TODO: REFERENCE NEEDS TO CHANGE AND CURRENTLY LOOPS WRONG DIRECTION!
         contour.rotate_contour(best_rot);
         contour.sort_contour_points();
+        println!("Contour {:?} rotated by {:?} rad", &contour.id, &best_rot);
 
         // Mark second half as aortic (assuming consistent point ordering)
         let half_len = contour.points.len() / 2;
@@ -136,9 +141,7 @@ pub fn find_best_rotation(
             // Rotate target contour inline without extra allocation
             let rotated: Vec<ContourPoint> = target
                 .iter()
-                .map(|p| p.rotate_point(
-                    angle, (centroid.0, centroid.1)
-                ))
+                .map(|p| p.rotate_point(angle, (centroid.0, centroid.1)))
                 .collect();
 
             let hausdorff_dist = hausdorff_distance(reference, &rotated);
