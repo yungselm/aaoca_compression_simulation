@@ -88,32 +88,41 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
     geometry.contours.insert(reference_pos, rotated_ref.clone());
 
     // Align each contour to the reference
-    for contour in geometry.contours.iter_mut() {
-        if contour.id == reference_index {
-            continue;
-        }
+    // Store processed contours' points and centroids for reference
+    let mut processed_refs = std::collections::HashMap::new();
 
-        // Initial rotation alignment
+    // Process contours in reverse order (highest ID first)
+    for contour in geometry.contours.iter_mut().rev() {
+        // Determine reference points and centroid
+        let (ref_points, ref_centroid) = match processed_refs.get(&(contour.id + 1)) {
+            Some((points, centroid)) => (points, centroid),
+            None => (&rotated_ref.points, &rotated_ref.centroid),
+        };
+
+        // Initial rotation alignment (same as original)
         contour.rotate_contour(rotation_to_y);
 
         // Translate to reference centroid
-        let tx = rotated_ref.centroid.0 - contour.centroid.0;
-        let ty = rotated_ref.centroid.1 - contour.centroid.1;
+        let tx = ref_centroid.0 - contour.centroid.0;
+        let ty = ref_centroid.1 - contour.centroid.1;
         contour.translate_contour((tx, ty, 0.0));
 
-        // Optimize rotation alignment
+        // Optimize rotation using dynamic reference
         let best_rot = find_best_rotation(
-            &rotated_ref.points,
+            ref_points,
             &contour.points,
             steps,
             range,
             &contour.centroid,
-        ); // TODO: REFERENCE NEEDS TO CHANGE AND CURRENTLY LOOPS WRONG DIRECTION!
+        );
+        println!("Matching Contour {:?} -> Contour {:?}, Best rotation: {:?}", contour.id + 1, &contour.id, &best_rot);
         contour.rotate_contour(best_rot);
         contour.sort_contour_points();
-        println!("Contour {:?} rotated by {:?} rad", &contour.id, &best_rot);
 
-        // Mark second half as aortic (assuming consistent point ordering)
+        // Store this processed contour's state for future reference
+        processed_refs.insert(contour.id, (contour.points.clone(), contour.centroid));
+
+        // Mark second half as aortic (original logic)
         let half_len = contour.points.len() / 2;
         for pt in contour.points.iter_mut().skip(half_len) {
             pt.aortic = true;

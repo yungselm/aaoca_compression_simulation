@@ -113,17 +113,28 @@ impl GeometryPair {
     }
 
     pub fn trim_geometries_same_length(mut self) -> GeometryPair {
-        let min_len = std::cmp::min(self.dia_geom.contours.len(), self.sys_geom.contours.len());
-
-        self.dia_geom.contours.truncate(min_len);
-        self.sys_geom.contours.truncate(min_len);
-
-        let min_catheter_len =
-            std::cmp::min(self.dia_geom.catheter.len(), self.sys_geom.catheter.len());
-
-        self.dia_geom.catheter.truncate(min_catheter_len);
-        self.sys_geom.catheter.truncate(min_catheter_len);
-
+        let dia_len = self.dia_geom.contours.len();
+        let sys_len = self.sys_geom.contours.len();
+        let min_len = std::cmp::min(dia_len, sys_len);
+    
+        if dia_len > min_len {
+            self.dia_geom.contours.drain(0..(dia_len - min_len));
+        }
+        if sys_len > min_len {
+            self.sys_geom.contours.drain(0..(sys_len - min_len));
+        }
+    
+        let dia_catheter_len = self.dia_geom.catheter.len();
+        let sys_catheter_len = self.sys_geom.catheter.len();
+        let min_catheter_len = std::cmp::min(dia_catheter_len, sys_catheter_len);
+    
+        if dia_catheter_len > min_catheter_len {
+            self.dia_geom.catheter.drain(0..(dia_catheter_len - min_catheter_len));
+        }
+        if sys_catheter_len > min_catheter_len {
+            self.sys_geom.catheter.drain(0..(sys_catheter_len - min_catheter_len));
+        }
+    
         self
     }
 }
