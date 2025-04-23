@@ -24,7 +24,7 @@ impl Geometry {
         };
 
         let base_path = Path::new(input_dir);
-        let records_path = Path::new(base_path).join("combined_original_manual.csv");
+        let records_path = Path::new(base_path).join("combined_sorted_manual.csv");
         let (contour_path, reference_path) = if diastole {
             (
                 Path::new(base_path).join("diastolic_contours.csv"),
@@ -44,6 +44,16 @@ impl Geometry {
         println!("Loaded reference_point");
         let records = Self::load_results(&records_path)?;
         println!("Loaded results");
+        
+        // since reordeing the frames, destroys the z-coordinates of everyframe they need to be stored here
+        // and then be reused after reordering them
+        let mut z_coords = Vec::new();
+
+        for contour in &contours {
+            z_coords.push(contour.centroid.2)
+        }
+        // order z_coords by f64 ascending
+        z_coords.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // reorder contours by records frame order, first filter only phase == 'D' if diastole true
         // otherwise only phase == 'S'
@@ -52,16 +62,27 @@ impl Geometry {
             .into_iter()
             .filter(|r| r.phase == desired_phase)
             .collect();
-
+        
         // Sort contours to match filtered record frame order
         let desired_order: Vec<u32> = filtered_records.iter().map(|r| r.frame).collect();
         contours.sort_by_key(|c| {
             let id = c.id as u32;
             desired_order
-                .iter()
-                .position(|&frame| frame == id)
-                .unwrap_or(usize::MAX)
+            .iter()
+            .position(|&frame| frame == id)
+            .unwrap_or(usize::MAX)
         });
+
+        // Update the z-coordinates of contours and their points using z_coords
+        for (i, contour) in contours.iter_mut().enumerate() {
+            // Replace the centroid's z-coordinate
+            contour.centroid.2 = z_coords[i];
+
+            // Replace the z-coordinate for every point in the contour
+            for point in contour.points.iter_mut() {
+            point.z = z_coords[i];
+            }
+        }
 
         // Reassign indices for contours and update their points' frame_index accordingly.
         for (new_idx, contour) in contours.iter_mut().enumerate() {
