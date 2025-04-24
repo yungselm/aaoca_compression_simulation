@@ -11,6 +11,7 @@ use std::error::Error;
 use config::load_config;
 use processing::comparison::prepare_geometries_comparison;
 use processing::process_case::{create_geometry_pair, process_case};
+use mesh_to_centerline::preprocessing::prepare_data_3d_alignment;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let config = load_config("config.toml")?;
@@ -57,7 +58,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.settings.interpolation_steps,
         )?;
     }
-    Ok(())
+    Ok::<(), Box<dyn Error>>(());
 
     // // Run centerline alignment if enabled.
     // if config.processing.run_centerline_alignment {
@@ -95,4 +96,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     //     )?;
     // }
     // Ok(())
+    if config.processing.run_centerline_alignment {
+        prepare_data_3d_alignment(
+        "rest", 
+        &config.general.rest_input_path, 
+        &config.general.rest_output_path)?;
+    }
+    Ok(())
 }

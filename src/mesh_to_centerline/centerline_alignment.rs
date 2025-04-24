@@ -346,12 +346,7 @@
 
 //     // Compute optimal rotation using the first frame's contour
 //     let first_frame_contour = &reference_mesh[0].1;
-//     // let optimal_angle = find_optimal_rotation(
-//     //     first_frame_contour,
-//     //     x_coord_ref,
-//     //     y_coord_ref,
-//     //     1.0, // Step size in degrees
-//     // );
+
 //     let optimal_angle = find_optimal_rotation(
 //         first_frame_contour,
 //         x_coord_ref,

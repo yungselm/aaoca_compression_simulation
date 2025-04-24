@@ -5,7 +5,7 @@ use crate::processing::contours::hausdorff_distance;
 use std::error::Error;
 
 use super::contours::align_frames_in_geometry;
-use crate::io::input::ContourPoint;
+use crate::io::input::{ContourPoint, Contour};
 
 pub struct GeometryPair {
     pub dia_geom: Geometry,
@@ -49,8 +49,11 @@ impl GeometryPair {
             contour.translate_contour((t.0, t.1, 0.0))
         }
 
+        let n_dia = diastole.contours.len();
+        let n_sys = systole.contours.len();
+
         // Adjust the z-coordinates of systolic contours. (later replaceed by adjust_z_coordinates)
-        let z_translation = diastole.contours[0].centroid.2 - systole.contours[0].centroid.2;
+        let z_translation = diastole.contours[n_dia - 1].centroid.2 - systole.contours[n_sys - 1].centroid.2;
         for ref mut contour in systole
             .contours
             .iter_mut()
@@ -83,32 +86,79 @@ impl GeometryPair {
     }
 
     pub fn adjust_z_coordinates(mut self) -> GeometryPair {
-        let mut z_coords: Vec<f64> = self
+        let mut z_coords_dia: Vec<f64> = self
             .dia_geom
             .contours
             .iter()
-            .chain(self.sys_geom.contours.iter())
+            .skip(1) // Skip the first entry since 0.0
             .map(|contour| contour.centroid.2)
             .collect();
 
-        for i in (0..z_coords.len()).rev() {
-            z_coords[i] /= (i + 1) as f64;
+        let mut z_coords_sys: Vec<f64> = self
+            .sys_geom
+            .contours
+            .iter()
+            .skip(1) // Skip the first entry sicne 0.0
+            .map(|contour| contour.centroid.2)
+            .collect();
+        
+        for i in (0..z_coords_dia.len()).rev() {
+            z_coords_dia[i] /= (i + 1) as f64;
         }
+
+        for i in (0..z_coords_sys.len()).rev() {
+            z_coords_sys[i] /= (i + 1) as f64;
+        }
+
+        let mut z_coords = z_coords_sys;
+        z_coords.extend(z_coords_dia);
 
         let mean_z_coords = z_coords.iter().sum::<f64>() / z_coords.len() as f64;
 
-        self.dia_geom
-            .contours
-            .iter_mut()
-            .chain(self.sys_geom.contours.iter_mut())
-            .chain(self.dia_geom.catheter.iter_mut())
-            .chain(self.sys_geom.catheter.iter_mut())
-            .for_each(|contour| {
-                contour.centroid.2 = (contour.centroid.2 / mean_z_coords).floor() * mean_z_coords;
-                for point in contour.points.iter_mut() {
-                    point.z = (point.z / mean_z_coords).floor() * mean_z_coords;
+        // self.dia_geom
+        //     .contours
+        //     .iter_mut()
+        //     .chain(self.sys_geom.contours.iter_mut())
+        //     .chain(self.dia_geom.catheter.iter_mut())
+        //     .chain(self.sys_geom.catheter.iter_mut())
+        //     .for_each(|contour| {
+        //         contour.centroid.2 = (contour.centroid.2 / mean_z_coords).floor() * mean_z_coords;
+        //         for point in contour.points.iter_mut() {
+        //             point.z = (point.z / mean_z_coords).floor() * mean_z_coords;
+        //         }
+        //     });
+
+        // If there are missing frames in between this will create false results, but probably
+        // still more accurate then taking the actual frame position due to breathing artefacts
+        // and the resampling performed in combined_sorted_manual to counter this. 
+        // 4) Assign evenly spaced Z in parallel across DIA & SYS contours and catheters
+        let n_slices = 
+            self.dia_geom.contours.len()
+            .max(self.sys_geom.contours.len())
+            .max(self.dia_geom.catheter.len())
+            .max(self.sys_geom.catheter.len());
+
+        let mut current_z = 0.0;
+        for i in 0..n_slices {
+            // helper to set z for a mutable slice element
+            let assign_z = |cont_opt: Option<&mut Contour>| {
+                if let Some(cont) = cont_opt {
+                    cont.centroid.2 = current_z;
+                    for pt in &mut cont.points {
+                        pt.z = current_z;
+                    }
                 }
-            });
+            };
+
+            assign_z(self.dia_geom.contours.get_mut(i));
+            assign_z(self.sys_geom.contours.get_mut(i));
+            assign_z(self.dia_geom.catheter.get_mut(i));
+            assign_z(self.sys_geom.catheter.get_mut(i));
+
+            println!("layer {} => z = {}", i, current_z);
+            current_z += mean_z_coords;
+        }
+      
         self
     }
 

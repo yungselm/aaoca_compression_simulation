@@ -9,89 +9,93 @@ use crate::io::Geometry;
 /// Since process_case() ensures that all points are sorted counterclockwise
 /// and aortic points are always on the right side the original geometry can be rebuild
 /// using simple operations.
-pub fn rebuild_geometry(reference_path: &str, contour_path: &str, catheter_path: &str) -> Geometry {
-    let reference_point = ContourPoint::read_reference_point(reference_path).unwrap();
+pub fn rebuild_geometry(contour_path: &str, catheter_path: &str) -> Geometry {
     let contours = read_obj_mesh(&contour_path).unwrap();
     let catheter = read_obj_mesh(&catheter_path).unwrap();
+
+    let n = contours.len() as u32;
 
     let mut geometry = Geometry {
         contours: Vec::new(),
         catheter: Vec::new(),
-        reference_point: reference_point,
+        reference_point: ContourPoint { 
+            frame_index: n, 
+            point_index: n, 
+            x: 0.0, 
+            y: 0.0, 
+            z: 0.0, 
+            aortic: false },
         label: "None".to_string(),
     };
 
     let mut new_contours = Vec::<Contour>::new();
 
-    // process contours
-    for (frame_idx, contour) in contours.into_iter() {
-        // find point with highest y contour.point_index set as 0 then give increasing indices counterclockwise
-        // for all set contour.frame_index to frame_idx
+    // Process contours
+    for (frame_idx, input_points) in contours.into_iter() {
+        let centroid = Contour::compute_centroid(&input_points);
+
         let mut contour_new = Contour {
             id: frame_idx,
-            points: Vec::new(),
-            centroid: Contour::compute_centroid(&contour),
+            points: Vec::new(), // Will be filled after processing
+            centroid,
             aortic_thickness: Vec::new(),
             pulmonary_thickness: Vec::new(),
         };
 
-        let mut points = contour_new.points;
+        let mut points = input_points; // Use the input points
 
-        // Find the point with the highest y-value.
+        // Find the point with the highest y-value
         if let Some((max_idx, _)) = points
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
         {
-            // Rotate the points so that the highest y-value point is at index 0.
             points.rotate_left(max_idx);
         }
 
-        // Assign indices counterclockwise and set frame_index and aortic flag.
+        // Assign indices and set frame_index and aortic flag
         for (i, point) in points.iter_mut().enumerate() {
             point.point_index = i as u32;
             point.frame_index = frame_idx;
-            point.aortic = i >= 250; // Set aortic to true for points with index 250+.
+            point.aortic = i >= 250; // Adjust the condition as needed
         }
 
         contour_new.points = points;
-
-        new_contours.push(contour_new)
+        new_contours.push(contour_new);
     }
 
     let mut new_catheter = Vec::<Contour>::new();
 
-    for (frame_idx, contour) in catheter.into_iter() {
+    // Similar correction for catheter processing
+    for (frame_idx, input_points) in catheter.into_iter() {
+        let centroid = Contour::compute_centroid(&input_points);
+
         let mut catheter_new = Contour {
             id: frame_idx,
             points: Vec::new(),
-            centroid: Contour::compute_centroid(&contour),
+            centroid,
             aortic_thickness: Vec::new(),
             pulmonary_thickness: Vec::new(),
         };
 
-        let mut points = catheter_new.points;
+        let mut points = input_points;
 
-        // Find the point with the highest y-value.
         if let Some((max_idx, _)) = points
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
         {
-            // Rotate the points so that the highest y-value point is at index 0.
             points.rotate_left(max_idx);
         }
 
-        // Assign indices counterclockwise and set frame_index and aortic flag.
         for (i, point) in points.iter_mut().enumerate() {
             point.point_index = i as u32;
             point.frame_index = frame_idx;
-            point.aortic = false; // Set aortic to true for points with index 250+.
+            point.aortic = false;
         }
 
         catheter_new.points = points;
-
-        new_catheter.push(catheter_new)
+        new_catheter.push(catheter_new);
     }
 
     geometry.contours = new_contours;
@@ -100,7 +104,7 @@ pub fn rebuild_geometry(reference_path: &str, contour_path: &str, catheter_path:
     geometry
 }
 
-pub fn read_obj_mesh(filename: &str) -> Result<Vec<(u32, Vec<ContourPoint>)>, Box<dyn Error>> {
+fn read_obj_mesh(filename: &str) -> Result<Vec<(u32, Vec<ContourPoint>)>, Box<dyn Error>> {
     let file = File::open(filename)?;
     let reader = BufReader::new(file);
 
