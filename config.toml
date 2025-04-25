@@ -9,11 +9,11 @@ aligned_rest_path = "output/aligned_rest"
 aligned_stress_path = "output/aligned_stress"
 
 [processing]
-run_process_case = true
-run_centerline_alignment = false
+run_process_case = false
+run_centerline_alignment = true
 
 [settings]
-interpolation_steps = 30
+interpolation_steps = 28 # this creates 30 meshes since diastole and systole already present
 x_coord_ref = 9.5840
 y_coord_ref = -201.3643
 z_coord_ref = 1750.4165

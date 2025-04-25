@@ -11,7 +11,7 @@ use std::error::Error;
 use config::load_config;
 use processing::comparison::prepare_geometries_comparison;
 use processing::process_case::{create_geometry_pair, process_case};
-use mesh_to_centerline::preprocessing::prepare_data_3d_alignment;
+use mesh_to_centerline::create_centerline_aligned_meshes;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let config = load_config("config.toml")?;
@@ -58,49 +58,42 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.settings.interpolation_steps,
         )?;
     }
-    Ok::<(), Box<dyn Error>>(());
+    let _ = Ok::<(), Box<dyn Error>>(());
 
-    // // Run centerline alignment if enabled.
-    // if config.processing.run_centerline_alignment {
-    //     create_centerline_aligned_meshes(
-    //         "rest",
-    //         "resampled_centerline.txt",
-    //         &config.general.rest_output_path,
-    //         &config.general.aligned_rest_path,
-    //         config.settings.interpolation_steps,
-    //         config.settings.x_coord_ref,
-    //         config.settings.y_coord_ref,
-    //         config.settings.z_coord_ref,
-    //         config.settings.x_coord_upper,
-    //         config.settings.y_coord_upper,
-    //         config.settings.z_coord_upper,
-    //         config.settings.x_coord_lower,
-    //         config.settings.y_coord_lower,
-    //         config.settings.z_coord_lower,
-    //     )?;
-    //     create_centerline_aligned_meshes(
-    //         "stress",
-    //         "resampled_centerline_stress.txt",
-    //         &config.general.stress_output_path,
-    //         &config.general.aligned_stress_path,
-    //         config.settings.interpolation_steps,
-    //         config.settings.x_coord_ref,
-    //         config.settings.y_coord_ref,
-    //         config.settings.z_coord_ref,
-    //         config.settings.x_coord_upper,
-    //         config.settings.y_coord_upper,
-    //         config.settings.z_coord_upper,
-    //         config.settings.x_coord_lower,
-    //         config.settings.y_coord_lower,
-    //         config.settings.z_coord_lower,
-    //     )?;
-    // }
-    // Ok(())
+    // Run centerline alignment if enabled.
     if config.processing.run_centerline_alignment {
-        prepare_data_3d_alignment(
-        "rest", 
-        &config.general.rest_input_path, 
-        &config.general.rest_output_path)?;
+        create_centerline_aligned_meshes(
+            "rest",
+            "input/rest_csv_files/resampled_centerline.txt",
+            &config.general.rest_output_path,
+            &config.general.aligned_rest_path,
+            config.settings.interpolation_steps,
+            config.settings.x_coord_ref,
+            config.settings.y_coord_ref,
+            config.settings.z_coord_ref,
+            config.settings.x_coord_upper,
+            config.settings.y_coord_upper,
+            config.settings.z_coord_upper,
+            config.settings.x_coord_lower,
+            config.settings.y_coord_lower,
+            config.settings.z_coord_lower,
+        )?;
+        create_centerline_aligned_meshes(
+            "stress",
+            "input/stress_csv_files/resampled_centerline_stress.txt",
+            &config.general.stress_output_path,
+            &config.general.aligned_stress_path,
+            config.settings.interpolation_steps,
+            config.settings.x_coord_ref,
+            config.settings.y_coord_ref,
+            config.settings.z_coord_ref,
+            config.settings.x_coord_upper,
+            config.settings.y_coord_upper,
+            config.settings.z_coord_upper,
+            config.settings.x_coord_lower,
+            config.settings.y_coord_lower,
+            config.settings.z_coord_lower,
+        )?;
     }
     Ok(())
 }
