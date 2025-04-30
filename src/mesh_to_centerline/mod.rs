@@ -10,7 +10,7 @@ use crate::texture::write_mtl_geometry;
 
 use std::path::Path;
 use crate::io::output::write_obj_mesh;
-use crate::utils::utils::{write_centerline_to_csv, write_geometry_to_csv, write_frame_transformation_to_csv};
+// use crate::utils::utils::{write_centerline_to_csv, write_geometry_to_csv, write_frame_transformation_to_csv};
 
 pub fn create_centerline_aligned_meshes(
     state: &str,

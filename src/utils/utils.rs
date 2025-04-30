@@ -7,6 +7,7 @@ use crate::io::input::{Contour, Centerline};
 use crate::mesh_to_centerline::operations::FrameTransformation;
 
 // debugging functions
+#[allow(dead_code)]
 pub fn write_frame_transformation_to_csv<P: AsRef<Path>>(
     path: P,
     frame: &FrameTransformation,
@@ -43,6 +44,7 @@ pub fn write_frame_transformation_to_csv<P: AsRef<Path>>(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn write_centerline_to_csv<P: AsRef<Path>>(
     path: P,
     centerline: &Centerline,
@@ -76,6 +78,7 @@ pub fn write_centerline_to_csv<P: AsRef<Path>>(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn write_geometry_to_csv<P: AsRef<Path>>(
     path: P,
     geometry: &Geometry,

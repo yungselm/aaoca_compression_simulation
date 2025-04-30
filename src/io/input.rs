@@ -46,6 +46,12 @@ impl Contour {
                 aortic_thickness: vec![aortic_thickness],
                 pulmonary_thickness: vec![pulmonary_thickness],
             });
+
+        for contour in &mut contours {
+            for (i, point) in contour.points.iter_mut().enumerate() {
+                point.point_index = i as u32;
+            }
+        }
         }
         Ok(contours)
     }
@@ -143,14 +149,10 @@ impl Contour {
         }
     }
 
-    /// Sorts contour points in counterclockwise order around the centroid
-    /// and rotates so that the highest y-value is first.
+    /// Reorders the point indices so that the point with the highest y-value is 0,
+    /// and the others are numbered counterclockwise around the centroid.
     pub fn sort_contour_points(&mut self) {
-        self.points.sort_by(|a, b| {
-            let angle_a = (a.y - self.centroid.1).atan2(a.x - self.centroid.0);
-            let angle_b = (b.y - self.centroid.1).atan2(b.x - self.centroid.0);
-            angle_a.partial_cmp(&angle_b).unwrap()
-        });
+        // Find the index of the point with the highest y-value
         let start_idx = self
             .points
             .iter()
@@ -158,10 +160,17 @@ impl Contour {
             .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
             .map(|(i, _)| i)
             .unwrap_or(0);
+
+        // Rotate the points so that the highest y-value point is first
         self.points.rotate_left(start_idx);
+
+        // Reassign point indices in counterclockwise order
+        for (i, point) in self.points.iter_mut().enumerate() {
+            point.point_index = i as u32;
+        }
     }
 
-    /// Translates a contour by a given (dx, dy, dz) offset.
+    /// Translates a contour by a given (dx, dy, dz) offset and recalculates the centroid.
     pub fn translate_contour(&mut self, translation: (f64, f64, f64)) {
         let (dx, dy, dz) = translation;
         for p in self.points.iter_mut() {

@@ -72,7 +72,6 @@ pub fn prepare_data_3d_alignment(
         }
     }
     
-    let n = reference_mesh_sys.contours.len();
     let ((pt1, pt2), _) = reference_mesh_sys.contours[0].find_closest_opposite();
     
     let reference_point = if pt1.aortic {

@@ -88,11 +88,16 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
     geometry.contours.insert(reference_pos, rotated_ref.clone());
 
     // Align each contour to the reference
-    // Store processed contours' points and centroids for reference
+    // Store processed contours' points and centroids as reference for each following contour
     let mut processed_refs = std::collections::HashMap::new();
+    let mut id_translation = Vec::new();
 
     // Process contours in reverse order (highest ID first)
     for contour in geometry.contours.iter_mut().rev() {
+        // Skip the reference contour
+        if contour.id == reference_index {
+            continue;
+        }
         // Determine reference points and centroid
         let (ref_points, ref_centroid) = match processed_refs.get(&(contour.id + 1)) {
             Some((points, centroid)) => (points, centroid),
@@ -105,6 +110,9 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
         // Translate to reference centroid
         let tx = ref_centroid.0 - contour.centroid.0;
         let ty = ref_centroid.1 - contour.centroid.1;
+
+        id_translation.push((contour.id, (tx, ty, 0.0)));
+
         contour.translate_contour((tx, ty, 0.0));
 
         // Optimize rotation using dynamic reference
@@ -115,7 +123,7 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
             range,
             &contour.centroid,
         );
-        println!("Matching Contour {:?} -> Contour {:?}, Best rotation: {:?}", contour.id + 1, &contour.id, &best_rot);
+        println!("Matching Contour {:?} -> Contour {:?}, Best rotation: {:?}", &contour.id, contour.id + 1, &best_rot);
         contour.rotate_contour(best_rot);
         contour.sort_contour_points();
 
@@ -126,6 +134,15 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
         let half_len = contour.points.len() / 2;
         for pt in contour.points.iter_mut().skip(half_len) {
             pt.aortic = true;
+        }
+    }
+
+    for catheter in geometry.catheter.iter_mut() {
+        // Translate catheter points to match the reference contour
+        for (id, translation) in &id_translation {
+            if catheter.id == *id {
+                catheter.translate_contour(*translation);
+            }
         }
     }
 

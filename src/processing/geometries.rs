@@ -34,36 +34,10 @@ impl GeometryPair {
         let mut systole =
             align_frames_in_geometry(self.sys_geom, steps_best_rotation, range_rotation_rad);
 
-        let diastolic_ref_centroid = diastole.contours[0].centroid;
-
-        for ref mut contour in systole
-            .contours
-            .iter_mut()
-            .chain(systole.catheter.iter_mut())
-        {
-            let systolic_centroid = contour.centroid;
-            let t = (
-                diastolic_ref_centroid.0 - systolic_centroid.0,
-                diastolic_ref_centroid.1 - systolic_centroid.1,
-            );
-            contour.translate_contour((t.0, t.1, 0.0))
-        }
-
-        let n_dia = diastole.contours.len();
-        let n_sys = systole.contours.len();
+        Self::translate_contours_to_match(&diastole, &mut systole);
 
         // Adjust the z-coordinates of systolic contours. (later replaceed by adjust_z_coordinates)
-        let z_translation = diastole.contours[n_dia - 1].centroid.2 - systole.contours[n_sys - 1].centroid.2;
-        for ref mut contour in systole
-            .contours
-            .iter_mut()
-            .chain(systole.catheter.iter_mut())
-        {
-            for point in contour.points.iter_mut() {
-                point.z += z_translation;
-            }
-            contour.centroid.2 += z_translation;
-        }
+        Self::apply_z_transformation(&diastole, &mut systole);
 
         let best_rotation_angle = find_best_rotation_all(
             &diastole,
@@ -82,6 +56,36 @@ impl GeometryPair {
         GeometryPair {
             dia_geom: diastole,
             sys_geom: systole,
+        }
+    }
+
+    fn translate_contours_to_match(dia: &Geometry, sys: &mut Geometry) {
+        let dia_ref = dia.contours.last().unwrap().centroid;
+        let sys_ref = sys.contours.last().unwrap().centroid;
+        let offset = (dia_ref.0 - sys_ref.0, dia_ref.1 - sys_ref.1);
+
+        for contour in &mut sys.contours {
+            contour.translate_contour((offset.0, offset.1, 0.0));
+        }
+
+        for catheter in &mut sys.catheter {
+            catheter.translate_contour((offset.0, offset.1, 0.0));
+        }
+    }
+
+    fn apply_z_transformation(dia: &Geometry, sys: &mut Geometry) {
+        let dia_last_z = dia.contours.last().unwrap().centroid.2;
+        let sys_last_z = sys.contours.last().unwrap().centroid.2;
+        let z_offset = dia_last_z - sys_last_z;
+
+        for contour in &mut sys.contours {
+            contour.points.iter_mut().for_each(|p| p.z += z_offset);
+            contour.centroid.2 += z_offset;
+        }
+
+        for catheter in &mut sys.catheter {
+            catheter.points.iter_mut().for_each(|p| p.z += z_offset);
+            catheter.centroid.2 += z_offset;
         }
     }
 

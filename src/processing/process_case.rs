@@ -6,6 +6,8 @@ use crate::io::output::write_obj_mesh;
 use crate::io::Geometry;
 use crate::processing::geometries::GeometryPair;
 use crate::texture::write_mtl_geometry;
+use crate::utils::utils::write_geometry_to_csv;
+
 
 pub fn create_geometry_pair(
     case_name: String,
@@ -14,14 +16,35 @@ pub fn create_geometry_pair(
     range_rotation_rad: f64,
 ) -> Result<GeometryPair, Box<dyn Error>> {
     let geometries = GeometryPair::new(input_dir, case_name.clone())?;
+    if case_name == "rest" {
+        write_geometry_to_csv("output/debugging/original_geometry_rest_dia.csv", &geometries.dia_geom)?;
+    } else {
+        write_geometry_to_csv("output/debugging/original_geometry_stress_dia.csv", &geometries.dia_geom)?;       
+    }
     let mut geometries = geometries.adjust_z_coordinates();
+    if case_name == "rest" {
+        write_geometry_to_csv("output/debugging/zadjusted_geometry_rest_dia.csv", &geometries.dia_geom)?;
+    } else {
+        write_geometry_to_csv("output/debugging/zdajusted_geometry_stress_dia.csv", &geometries.dia_geom)?;       
+    }
     geometries = geometries.process_geometry_pair(steps_best_rotation, range_rotation_rad);
     geometries = geometries.trim_geometries_same_length();
+    if case_name == "rest" {
+        write_geometry_to_csv("output/debugging/aligned_geometry_rest_dia.csv", &geometries.dia_geom)?;
+    } else {
+        write_geometry_to_csv("output/debugging/aligned_geometry_stress_dia.csv", &geometries.dia_geom)?;       
+    }
 
     let dia_geom = geometries.dia_geom;
     let dia_geom = dia_geom.smooth_contours();
     let sys_geom = geometries.sys_geom;
     let sys_geom = sys_geom.smooth_contours();
+
+    if case_name == "rest" {
+        write_geometry_to_csv("output/debugging/smoothed_geometry_rest_dia.csv", &dia_geom)?;
+    } else {
+        write_geometry_to_csv("output/debugging/smoothed_geometry_stress_dia.csv", &dia_geom)?;       
+    }    
 
     Ok(GeometryPair {
         dia_geom: dia_geom,
@@ -176,6 +199,7 @@ pub fn interpolate_contours(
 }
 
 /// Helper function to interpolate Vec<Contour>
+#[allow(dead_code)]
 fn interpolate_points(
     start_contours: &[Contour],
     end_contours: &[Contour],

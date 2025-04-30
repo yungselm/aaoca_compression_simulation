@@ -94,12 +94,16 @@ impl Geometry {
             }
         } // new order has now highest index for the ostium
 
-        let catheter = Contour::create_catheter_contours(
+        let mut catheter = Contour::create_catheter_contours(
             &contours
                 .iter()
                 .flat_map(|c| c.points.clone())
                 .collect::<Vec<_>>(),
         )?;
+        
+        //sort catheter in ascending order
+        catheter.sort_by_key(|c| c.id);
+
         println!("Created catheter contours");
         println!("Generating geometry for {:?}", input_dir);
 
