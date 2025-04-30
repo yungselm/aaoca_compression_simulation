@@ -144,6 +144,7 @@ fn calculate_normal(points: &[ContourPoint], centroid: &(f64, f64, f64)) -> Vect
 /// and the reference coordinate.
 pub fn find_optimal_rotation(
     contour: &Contour,
+    reference_point: &ContourPoint,
     target_x: f64,
     target_y: f64,
     target_z: f64,
@@ -156,6 +157,8 @@ pub fn find_optimal_rotation(
     angle_step: f64,
     centerline_point: &CenterlinePoint
 ) -> f64 {
+    let index_reference = reference_point.point_index;
+
     let target_aortic = Point3::new(target_x, target_y, target_z);
     let target_upper = Point3::new(x_coord_upper, y_coord_upper, z_coord_upper);
     let target_lower = Point3::new(x_coord_lower, y_coord_lower, z_coord_lower);
@@ -168,25 +171,15 @@ pub fn find_optimal_rotation(
         let mut temp_frame = contour.clone();
         
         temp_frame.rotate_contour(angle);
-
+        
+        
         align_frame(&mut temp_frame, centerline_point);
         let temp_contour = &temp_frame.points;
-
-        let (cont_p_upper, cont_p_lower) = if temp_contour[125].aortic {
-            // Aortic on left - swap upper/lower indices
-            (&temp_contour[250], &temp_contour[0])
-        } else {
-            (&temp_contour[0], &temp_contour[250])
-        };
-
-        let (closest_pair, _) = Contour::find_closest_opposite(&temp_frame);
-
-        // Select the point where aortic is true.
-        let p_aortic = if closest_pair.0.aortic {
-            closest_pair.0
-        } else {
-            closest_pair.1
-        };
+        
+        // Select the reference_point, and index 0 and 250 since contours already ordered after read in.
+        let p_aortic = temp_contour.iter().find(|p| p.point_index == index_reference).unwrap();
+        let cont_p_upper = temp_contour.iter().find(|p| p.point_index == 0).unwrap();
+        let cont_p_lower = temp_contour.iter().find(|p| p.point_index == 250).unwrap();
 
         // Calculate distances for all three points
         let d_aortic = nalgebra::distance(

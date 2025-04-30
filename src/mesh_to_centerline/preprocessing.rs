@@ -19,6 +19,7 @@ pub fn prepare_data_3d_alignment(
     let catheter_path = format!("{}/catheter_000_{}.obj", input_dir, state);
 
     let mut reference_mesh = rebuild_geometry(&ref_mesh_path, &catheter_path);
+    
     reference_mesh.contours.reverse(); // reverse contours since for centerline alignment it is beneficial to have 0 for the ostium
     // After reversing the contours, update their IDs to match their new indices
     for (index, contour) in reference_mesh.contours.iter_mut().enumerate() {
@@ -48,6 +49,8 @@ pub fn prepare_data_3d_alignment(
     
     reference_mesh.label = format!("diastole_{}", state);
     reference_mesh.reference_point = reference_point;
+
+    println!("Reference point after reloading: {:?}", &reference_mesh.reference_point);
 
     // ----- Process the reference mesh: mesh_029_rest.obj or mesh_029_stress.obj -----
     let ref_mesh_path_sys = format!("{}/mesh_{:03}_{}.obj", input_dir, (interpolation_steps + 1), state);

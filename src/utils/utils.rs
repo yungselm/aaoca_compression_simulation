@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::path::Path;
 use csv::Writer;
+use std::fs::File;
+use std::io::{BufWriter, Write};
 
 use crate::io::Geometry;
 use crate::io::input::{Contour, Centerline};
@@ -129,5 +131,63 @@ pub fn write_geometry_to_csv<P: AsRef<Path>>(
     write_contours("catheter", &geometry.catheter, &mut wtr)?;
 
     wtr.flush()?;
+    Ok(())
+}
+
+#[allow(dead_code)]
+pub fn write_debug_obj_mesh(
+    contours: &Vec<Contour>,
+    filename: &str,
+) -> Result<(), Box<dyn Error>> {
+    let sorted_contours = contours.to_owned();
+
+    // Validation remains the same
+    if sorted_contours.len() < 2 {
+        return Err("Need at least two contours to create a mesh.".into());
+    }
+
+    let points_per_contour = sorted_contours[0].points.len();
+    for contour in &sorted_contours {
+        if contour.points.len() != points_per_contour {
+            return Err("All contours must have the same number of points.".into());
+        }
+    }
+
+    let file = File::create(filename)?;
+    let mut writer = BufWriter::new(file);
+    let mut vertex_offsets = Vec::new();
+    let mut current_offset = 1;
+
+    // Write vertices only
+    for contour in &sorted_contours {
+        vertex_offsets.push(current_offset);
+        for point in &contour.points {
+            writeln!(writer, "v {} {} {}", point.x, point.y, point.z)?;
+            current_offset += 1;
+        }
+    }
+
+    // Write faces without UVs or normals
+    for c in 0..(sorted_contours.len() - 1) {
+        let offset1 = vertex_offsets[c];
+        let offset2 = vertex_offsets[c + 1];
+        for j in 0..points_per_contour {
+            let j_next = (j + 1) % points_per_contour;
+            
+            // First triangle
+            let v1 = offset1 + j;
+            let v2 = offset1 + j_next;
+            let v3 = offset2 + j;
+            writeln!(writer, "f {} {} {}", v1, v2, v3)?;
+
+            // Second triangle
+            let v4 = offset2 + j;
+            let v5 = offset1 + j_next;
+            let v6 = offset2 + j_next;
+            writeln!(writer, "f {} {} {}", v4, v5, v6)?;
+        }
+    }
+
+    println!("Debug OBJ mesh written to {}", filename);
     Ok(())
 }

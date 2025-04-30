@@ -10,7 +10,7 @@ use crate::texture::write_mtl_geometry;
 
 use std::path::Path;
 use crate::io::output::write_obj_mesh;
-// use crate::utils::utils::{write_centerline_to_csv, write_geometry_to_csv, write_frame_transformation_to_csv};
+use crate::utils::utils::{write_debug_obj_mesh, write_geometry_to_csv};
 
 pub fn create_centerline_aligned_meshes(
     state: &str,
@@ -33,19 +33,23 @@ pub fn create_centerline_aligned_meshes(
     let (centerline, ref_mesh_dia, ref_mesh_sys) = prepare_data_3d_alignment(state, centerline_path, input_dir, interpolation_steps)?;
     let interpolated_meshes = read_interpolated_meshes(state, input_dir, interpolation_steps);
 
+    if state == "rest" {
+        write_geometry_to_csv("output/debugging/reloaded_geometry_rest_dia.csv", &ref_mesh_sys)?;
+        write_debug_obj_mesh(&ref_mesh_dia.contours, "output/debugging/reloaded_geometry_rest_sys.obj")?;
+        write_debug_obj_mesh(&ref_mesh_sys.catheter, "output/debugging/reloaded_catheter_rest_sys.obj")?;
+    } else {
+        write_geometry_to_csv("output/debugging/reloaded_geometry_stress_sys.csv", &ref_mesh_sys)?;       
+    }
+
     let mut geometries = vec![ref_mesh_dia.clone()];
     geometries.extend(interpolated_meshes);
     geometries.extend(vec![ref_mesh_sys.clone()]);
 
-    let n = ref_mesh_dia.contours.len();
-    let n_cl = centerline.points.len();
+    let reference_point = &ref_mesh_dia.reference_point;
 
-    println!("Contour 0 has this z: {:?} and index: {:?}", &ref_mesh_dia.contours[0].centroid.2, ref_mesh_dia.contours[0].id);
-    println!("Contour n -1 has this z: {:?} and index: {:?}", &ref_mesh_dia.contours[n - 1].centroid.2, ref_mesh_dia.contours[n - 1].id);
-    println!("Centerline 0 has this z: {:?} and index: {:?}", &centerline.points[0].contour_point.z, &centerline.points[0].contour_point.frame_index);
-    println!("Centerline n - 1 has this z: {:?} and index: {:?}", &centerline.points[n_cl - 1].contour_point.z, &centerline.points[n_cl - 1].contour_point.frame_index);
     let optimal_angle = find_optimal_rotation(
         &ref_mesh_dia.contours[0],
+        reference_point,
         x_coord_ref,
         y_coord_ref,
         z_coord_ref,
@@ -67,16 +71,6 @@ pub fn create_centerline_aligned_meshes(
             contour.rotate_contour(optimal_angle);
         }
     }
-
-    // print elliptic ratio of the last and first frame
-    let n = ref_mesh_dia.contours.len();
-    let ((_, _), dist) = ref_mesh_dia.contours[0].find_farthest_points();
-    let ((_, _), dist2) = ref_mesh_dia.contours[0].find_closest_opposite();
-    // calculate distance between closest opposite points
-    println!("Elliptic ratio Contour 0: {:?}", (dist / dist2));
-    let ((_, _), dist) = ref_mesh_dia.contours[n - 1].find_farthest_points();
-    let((_, _), dist2) = ref_mesh_dia.contours[n - 1].find_closest_opposite();
-    println!("Elliptic ratio Contour n - 1: {:?}", (dist / dist2));
 
     let transformations = get_transformations(ref_mesh_dia, &centerline);
 
@@ -103,15 +97,9 @@ pub fn create_centerline_aligned_meshes(
                     *pt = transformation.apply_to_point(pt);
                 }
             }
+            catheter.centroid = Contour::compute_centroid(&catheter.points);
         }
     }
-    
-    // let n_transf = transformations.len();
-    
-    // write_centerline_to_csv("output/centerline.csv", &centerline)?;
-    // write_frame_transformation_to_csv("output/transformation.csv", &transformations[0])?;
-    // write_frame_transformation_to_csv("output/transformation_2.csv", &transformations[n_transf - 1])?;
-    // write_geometry_to_csv("output/geometry.csv", &geometries[0])?;
 
     let (uv_coords_contours, uv_coords_catheter) = 
         write_mtl_geometry(&geometries, output_dir, state);

@@ -149,6 +149,14 @@ impl Contour {
         }
     }
 
+    pub fn rotate_contour_around_point(&mut self, angle: f64, center: (f64, f64)) {
+        for p in self.points.iter_mut() {
+            let rotated = ContourPoint::rotate_point(p, angle, center);
+            p.x = rotated.x;
+            p.y = rotated.y;
+        }
+    }
+
     /// Reorders the point indices so that the point with the highest y-value is 0,
     /// and the others are numbered counterclockwise around the centroid.
     pub fn sort_contour_points(&mut self) {

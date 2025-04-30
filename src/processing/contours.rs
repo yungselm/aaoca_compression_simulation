@@ -111,10 +111,9 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
         let tx = ref_centroid.0 - contour.centroid.0;
         let ty = ref_centroid.1 - contour.centroid.1;
 
-        id_translation.push((contour.id, (tx, ty, 0.0)));
-
+        
         contour.translate_contour((tx, ty, 0.0));
-
+        
         // Optimize rotation using dynamic reference
         let best_rot = find_best_rotation(
             ref_points,
@@ -123,6 +122,9 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
             range,
             &contour.centroid,
         );
+
+        id_translation.push((contour.id, (tx, ty, 0.0), best_rot, (contour.centroid.0, contour.centroid.1)));
+
         println!("Matching Contour {:?} -> Contour {:?}, Best rotation: {:?}", &contour.id, contour.id + 1, &best_rot);
         contour.rotate_contour(best_rot);
         contour.sort_contour_points();
@@ -139,9 +141,11 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
 
     for catheter in geometry.catheter.iter_mut() {
         // Translate catheter points to match the reference contour
-        for (id, translation) in &id_translation {
+        for (id, translation, best_rot, center) in &id_translation {
             if catheter.id == *id {
                 catheter.translate_contour(*translation);
+                catheter.rotate_contour_around_point(*best_rot, *center);
+                catheter.sort_contour_points();
             }
         }
     }
