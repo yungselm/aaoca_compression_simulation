@@ -10,20 +10,19 @@ aligned_stress_path = "output/aligned_stress"
 
 [processing]
 run_process_case = true
-run_phase_comparison = false
 run_centerline_alignment = false
 
 [settings]
-interpolation_steps = 30
-x_coord_ref = 9.5840
+interpolation_steps = 28 # this creates 30 meshes since diastole and systole already present
+x_coord_ref = 12.2605
 y_coord_ref = -201.3643
-z_coord_ref = 1750.4165
-x_coord_upper = 11.9164
+z_coord_ref = 1751.0554
+x_coord_upper = 11.7567
 y_coord_upper = -202.1920
-z_coord_upper = 1754.6775
-x_coord_lower = 15.5806
+z_coord_upper = 1754.7975
+x_coord_lower = 15.6605
 y_coord_lower = -202.1920
-z_coord_lower = 1750.1251
+z_coord_lower = 1749.9655
 steps_best_rotation = 300
 # range_rotation_rad = 1.05 # +/- 60 degrees
 range_rotation_rad = 1.57 # +/- 90 degrees
