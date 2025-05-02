@@ -118,7 +118,7 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
     if geometry.label == "rest" {
         write_geometry_to_csv("output/debugging/after_rotation_geometry.csv", &geometry);
     }
-    
+
     // Align each contour to the reference
     // Store processed contours' points and centroids as reference for each following contour
     let mut processed_refs = std::collections::HashMap::new();
@@ -155,7 +155,9 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
             &contour.centroid,
         );
 
-        id_translation.push((contour.id, (tx, ty, 0.0), best_rot, (contour.centroid.0, contour.centroid.1)));
+        let rotation = rotation_to_y + best_rot;
+
+        id_translation.push((contour.id, (tx, ty, 0.0), rotation, (contour.centroid.0, contour.centroid.1)));
 
         println!("Matching Contour {:?} -> Contour {:?}, Best rotation: {:?}", &contour.id, contour.id + 1, &best_rot);
         contour.rotate_contour(best_rot);
