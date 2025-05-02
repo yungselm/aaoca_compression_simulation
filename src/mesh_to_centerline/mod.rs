@@ -63,12 +63,21 @@ pub fn create_centerline_aligned_meshes(
         &centerline.points[0],
     );
 
-    println!("find optimal rotation worked");
-
     // Rotate every contour in every geometry in geometries by the optimal angle
     for geometry in &mut geometries {
         for contour in &mut geometry.contours {
             contour.rotate_contour(optimal_angle);
+        }
+    }
+
+    // Rotate the catheter points in every geometry in geometries by the optimal angle around the centroid of the corresponding contour
+    for geometry in &mut geometries {
+        for catheter in &mut geometry.catheter {
+            if let Some(contour) = geometry.contours.iter().find(|c| c.id == catheter.id) {
+                catheter.rotate_contour_around_point(optimal_angle, (contour.centroid.0, contour.centroid.1));
+            } else {
+                eprintln!("No matching contour found for catheter with id {}", catheter.id);
+            }
         }
     }
 

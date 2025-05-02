@@ -4,15 +4,10 @@ use std::collections::HashSet;
 
 use crate::io::input::ContourPoint;
 use crate::io::Geometry;
-use crate::utils::utils::write_geometry_to_csv;
 
 pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64) -> Geometry {
     // Sort contours by frame index.
     geometry.contours.sort_by_key(|contour| contour.id);
-
-    if geometry.label == "rest" {
-        write_geometry_to_csv("output/debugging/before_rotation_geometry.csv", &geometry);
-    }
 
     // Use sort_contour_points on all contour points to ensure they are counterclockwise
     for contour in &mut geometry.contours {
@@ -60,11 +55,6 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
             (p2_pos+1..p1_pos).collect()
         )
     };
-
-    println!(
-        "First half indices: {:?}, Second half indices: {:?}",
-        &first_half_indices, &second_half_indices
-    );
 
     // Calculate distances using actual positions in sorted contour
     let dist_first: f64 = ref_contour_copy.points.iter().enumerate()
@@ -114,10 +104,6 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
     ref_catheter.rotate_contour_around_point(rotation_to_y, (ref_contour.centroid.0, ref_contour.centroid.1));
     ref_catheter.sort_contour_points();
     geometry.catheter.insert(reference_pos, ref_catheter.clone());
-
-    if geometry.label == "rest" {
-        write_geometry_to_csv("output/debugging/after_rotation_geometry.csv", &geometry);
-    }
 
     // Align each contour to the reference
     // Store processed contours' points and centroids as reference for each following contour
