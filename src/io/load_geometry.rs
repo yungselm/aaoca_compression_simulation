@@ -57,7 +57,7 @@ pub fn rebuild_geometry(contour_path: &str, catheter_path: &str) -> Geometry {
         for (i, point) in points.iter_mut().enumerate() {
             point.point_index = i as u32;
             point.frame_index = frame_idx;
-            point.aortic = i >= 250; // Adjust the condition as needed
+            point.aortic = i >= 250; // >=250 works since in process_case.rs it is ensured that aortic points are on the right side
         }
 
         contour_new.points = points;

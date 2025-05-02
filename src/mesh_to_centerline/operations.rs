@@ -137,7 +137,9 @@ fn calculate_normal(points: &[ContourPoint], centroid: &(f64, f64, f64)) -> Vect
     let v2 = Vector3::new(p2.x - centroid.0, p2.y - centroid.1, p2.z - centroid.2);
     let v3 = Vector3::new(p3.x - centroid.0, p3.y - centroid.1, p3.z - centroid.2);
 
-    (v1.cross(&v2) + v2.cross(&v3)).normalize()
+    // need to take the negative normal, since centerline "appears backwards"
+    -(v1.cross(&v2) + v2.cross(&v3)).normalize()
+    
 }
 
 /// Finds the optimal rotation angle by minimizing the distance between the closest opposite point

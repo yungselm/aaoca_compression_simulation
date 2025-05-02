@@ -140,41 +140,58 @@ impl Contour {
         (closest_pair, min_dist)
     }
 
-    /// Rotates all points in a contour about a center.
     pub fn rotate_contour(&mut self, angle: f64) {
-        for p in self.points.iter_mut() {
-            let rotated = ContourPoint::rotate_point(p, angle, (self.centroid.0, self.centroid.1));
-            p.x = rotated.x;
-            p.y = rotated.y;
-        }
+        let center = (self.centroid.0, self.centroid.1);
+        // Replace entire points instead of just coordinates
+        self.points = self.points.iter()
+            .map(|p| p.rotate_point(angle, center))
+            .collect();
     }
-
+    
     pub fn rotate_contour_around_point(&mut self, angle: f64, center: (f64, f64)) {
-        for p in self.points.iter_mut() {
-            let rotated = ContourPoint::rotate_point(p, angle, center);
-            p.x = rotated.x;
-            p.y = rotated.y;
-        }
+        // Replace entire points instead of just coordinates
+        self.points = self.points.iter()
+            .map(|p| p.rotate_point(angle, center))
+            .collect();
     }
 
-    /// Reorders the point indices so that the point with the highest y-value is 0,
-    /// and the others are numbered counterclockwise around the centroid.
+    /// Reorders `self.points` so that:
+    /// 1) They’re sorted counterclockwise around the centroid,
+    /// 2) The point with the highest Y-value is at index 0,
+    /// 3) Each `point.point_index` matches its position in the Vec.
     pub fn sort_contour_points(&mut self) {
-        // Find the index of the point with the highest y-value
-        let start_idx = self
-            .points
+        let n = self.points.len() as f64;
+        if n == 0.0 {
+            return;
+        }
+
+        // 1) Compute centroid (cx, cy)
+        let (sum_x, sum_y) = self.points.iter()
+            .fold((0.0, 0.0), |(sx, sy), p| (sx + p.x, sy + p.y));
+        let cx = sum_x / n;
+        let cy = sum_y / n;
+
+        // 2) Sort by *descending* angle around centroid (clockwise sweep)
+        self.points.sort_by(|a, b| {
+            let angle_a = (a.y - cy).atan2(a.x - cx);
+            let angle_b = (b.y - cy).atan2(b.x - cx);
+            // flip the comparison order
+            angle_a.partial_cmp(&angle_b).unwrap()
+        });
+
+        // 3) Find the index of the highest‐Y point and rotate it to front
+        if let Some(start_idx) = self.points
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.y.partial_cmp(&b.y).unwrap())
             .map(|(i, _)| i)
-            .unwrap_or(0);
+        {
+            self.points.rotate_left(start_idx);
+        }
 
-        // Rotate the points so that the highest y-value point is first
-        self.points.rotate_left(start_idx);
-
-        // Reassign point indices in counterclockwise order
-        for (i, point) in self.points.iter_mut().enumerate() {
-            point.point_index = i as u32;
+        // 4) Re-index in array order
+        for (i, pt) in self.points.iter_mut().enumerate() {
+            pt.point_index = i as u32;
         }
     }
 

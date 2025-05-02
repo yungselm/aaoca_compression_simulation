@@ -25,7 +25,7 @@ pub fn create_geometry_pair(
     if case_name == "rest" {
         write_geometry_to_csv("output/debugging/zadjusted_geometry_rest_sys.csv", &geometries.sys_geom)?;
     } else {
-        write_geometry_to_csv("output/debugging/zdajusted_geometry_stress_sys.csv", &geometries.sys_geom)?;       
+        write_geometry_to_csv("output/debugging/zadjusted_geometry_stress_sys.csv", &geometries.sys_geom)?;       
     }
     geometries = geometries.process_geometry_pair(steps_best_rotation, range_rotation_rad);
     geometries = geometries.trim_geometries_same_length();

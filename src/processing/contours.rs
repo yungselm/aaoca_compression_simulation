@@ -1,14 +1,23 @@
 use rayon::prelude::*;
 use std::f64::consts::PI;
+use std::collections::HashSet;
 
 use crate::io::input::ContourPoint;
 use crate::io::Geometry;
-
-const MIDDLE_IMAGE: f64 = 4.5; // this is for an IVUS image with 512x512 pixels and 0.01759 pixelsspacing
+use crate::utils::utils::write_geometry_to_csv;
 
 pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64) -> Geometry {
     // Sort contours by frame index.
     geometry.contours.sort_by_key(|contour| contour.id);
+
+    if geometry.label == "rest" {
+        write_geometry_to_csv("output/debugging/before_rotation_geometry.csv", &geometry);
+    }
+
+    // Use sort_contour_points on all contour points to ensure they are counterclockwise
+    for contour in &mut geometry.contours {
+        contour.sort_contour_points();
+    }
 
     // Use sort_contour_points on all catheter points to ensure they are counterclockwise
     for catheter in &mut geometry.catheter {
@@ -30,11 +39,64 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
     let ref_contour = &mut geometry.contours.remove(reference_pos);
     println!("Using contour {} as reference.", reference_index);
 
-    let ((p1, p2), _dist) = ref_contour.find_farthest_points();
+    let ref_contour_copy = ref_contour.clone();
+
+    let ((p1, p2), _dist) = ref_contour_copy.find_farthest_points();
+    let ((p3, p4), _dist) = ref_contour_copy.find_closest_opposite();
+
+    // Calculate indices in sorted contour
+    let p1_pos = ref_contour_copy.points.iter().position(|pt| pt == p1).unwrap();
+    let p2_pos = ref_contour_copy.points.iter().position(|pt| pt == p2).unwrap();
+
+    // Create index sets for aortic regions
+    let (first_half_indices, second_half_indices) = if p1_pos < p2_pos {
+        (
+            (p1_pos..=p2_pos).collect::<HashSet<_>>(),
+            (0..p1_pos).chain(p2_pos+1..ref_contour_copy.points.len()).collect::<HashSet<_>>()
+        )
+    } else {
+        (
+            (p1_pos..ref_contour_copy.points.len()).chain(0..=p2_pos).collect(),
+            (p2_pos+1..p1_pos).collect()
+        )
+    };
+
+    println!(
+        "First half indices: {:?}, Second half indices: {:?}",
+        &first_half_indices, &second_half_indices
+    );
+
+    // Calculate distances using actual positions in sorted contour
+    let dist_first: f64 = ref_contour_copy.points.iter().enumerate()
+        .filter(|(i, _)| first_half_indices.contains(i))
+        .map(|(_, p)| p.distance_to(&geometry.reference_point))
+        .sum();
+
+    let dist_second: f64 = ref_contour_copy.points.iter().enumerate()
+        .filter(|(i, _)| second_half_indices.contains(i))
+        .map(|(_, p)| p.distance_to(&geometry.reference_point))
+        .sum();
+
+    // Assign aortic flags using current indices
+    for pt in ref_contour.points.iter_mut() {
+        pt.aortic = if dist_first < dist_second {
+            first_half_indices.contains(&(pt.point_index as usize))
+        } else {
+            second_half_indices.contains(&(pt.point_index as usize))
+        };
+    }
+
+    // Find a rotation that makes contour vertical and ensures aortic points are on the right side
     let dx = p2.x - p1.x;
     let dy = p2.y - p1.y;
     let line_angle = dy.atan2(dx);
     let mut rotation_to_y = (PI / 2.0) - line_angle;
+
+    // Adjust rotation if necessary to ensure aortic points are on the right side
+    if p3.aortic && p3.x < p4.x {
+        rotation_to_y += PI;
+    }
+
     println!(
         "Reference line angle: {:.3} rad; rotating reference by {:.3} rad",
         &line_angle, &rotation_to_y
@@ -45,48 +107,18 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
     rotated_ref.rotate_contour(rotation_to_y);
     rotated_ref.sort_contour_points();
 
-    let n = rotated_ref.points.len() / 2;
-
-    // --- Begin aortic determination ---
-    // We assume there are exactly 500 points; split into two halves: indices 0..249 and 250..499.
-    // Compute the cumulative distance for each half from the rotated reference.
-    let first_half_distance: f64 = rotated_ref
-        .points
-        .iter()
-        .take(n)
-        .map(|pt| pt.distance_to(&geometry.reference_point))
-        .sum();
-    let second_half_distance: f64 = rotated_ref
-        .points
-        .iter()
-        .skip(n)
-        .map(|pt| pt.distance_to(&geometry.reference_point))
-        .sum();
-
-    // Mark the half that is closer as 'aortic' (i.e. set to true).
-    if first_half_distance < second_half_distance {
-        for pt in rotated_ref.points.iter_mut().take(n) {
-            pt.aortic = true;
-        }
-        println!("First half (points 0 to 249) marked as aortic.");
-        if first_half_distance < MIDDLE_IMAGE {
-            rotation_to_y += PI;
-            rotated_ref.rotate_contour(PI);
-        }
-    } else {
-        for pt in rotated_ref.points.iter_mut().skip(n) {
-            pt.aortic = true;
-        }
-        println!("Second half (points 250 to 499) marked as aortic.");
-        if second_half_distance < MIDDLE_IMAGE {
-            rotation_to_y += PI;
-            rotated_ref.rotate_contour(PI);
-        }
-    }
-
     // Update the reference contour in geometry with rotated version
     geometry.contours.insert(reference_pos, rotated_ref.clone());
 
+    let ref_catheter = &mut geometry.catheter.remove(reference_pos);
+    ref_catheter.rotate_contour_around_point(rotation_to_y, (ref_contour.centroid.0, ref_contour.centroid.1));
+    ref_catheter.sort_contour_points();
+    geometry.catheter.insert(reference_pos, ref_catheter.clone());
+
+    if geometry.label == "rest" {
+        write_geometry_to_csv("output/debugging/after_rotation_geometry.csv", &geometry);
+    }
+    
     // Align each contour to the reference
     // Store processed contours' points and centroids as reference for each following contour
     let mut processed_refs = std::collections::HashMap::new();

@@ -119,19 +119,6 @@ impl GeometryPair {
 
         let mean_z_coords = z_coords.iter().sum::<f64>() / z_coords.len() as f64;
 
-        // self.dia_geom
-        //     .contours
-        //     .iter_mut()
-        //     .chain(self.sys_geom.contours.iter_mut())
-        //     .chain(self.dia_geom.catheter.iter_mut())
-        //     .chain(self.sys_geom.catheter.iter_mut())
-        //     .for_each(|contour| {
-        //         contour.centroid.2 = (contour.centroid.2 / mean_z_coords).floor() * mean_z_coords;
-        //         for point in contour.points.iter_mut() {
-        //             point.z = (point.z / mean_z_coords).floor() * mean_z_coords;
-        //         }
-        //     });
-
         // If there are missing frames in between this will create false results, but probably
         // still more accurate then taking the actual frame position due to breathing artefacts
         // and the resampling performed in combined_sorted_manual to counter this. 
