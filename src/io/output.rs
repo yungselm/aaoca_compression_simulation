@@ -1,5 +1,5 @@
 use crate::io::input::Contour;
-use std::error::Error;
+use anyhow::{bail, anyhow};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
@@ -8,18 +8,18 @@ pub fn write_obj_mesh(
     uv_coords: &[(f64, f64)],
     filename: &str,
     mtl_filename: &str,
-) -> Result<(), Box<dyn Error>> {
+) -> anyhow::Result<()> {
     let sorted_contours = contours.to_owned();
 
     // Validation
     if sorted_contours.len() < 2 {
-        return Err("Need at least two contours to create a mesh.".into());
+        bail!("Need at least two contours to create a mesh.");
     }
 
     let points_per_contour = sorted_contours[0].points.len();
     for contour in &sorted_contours {
         if contour.points.len() != points_per_contour {
-            return Err("All contours must have the same number of points.".into());
+            bail!("All contours must have the same number of points.");
         }
     }
 
@@ -50,7 +50,7 @@ pub fn write_obj_mesh(
 
     // Validate UV coordinates
     if uv_coords.len() != current_offset - 1 {
-        return Err(format!(
+        return Err(anyhow!(
             "UV coordinates must match the number of vertices. Expected {}, got {}.",
             current_offset - 1,
             uv_coords.len()

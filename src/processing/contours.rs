@@ -87,6 +87,7 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
         rotation_to_y += PI;
     }
 
+    println!("----------------------Aligning frames----------------------");
     println!(
         "Reference line angle: {:.3} rad; rotating reference by {:.3} rad",
         &line_angle, &rotation_to_y

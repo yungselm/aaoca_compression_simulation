@@ -202,6 +202,7 @@ pub fn find_optimal_rotation(
         // Calculate sum of squared errors
         let total_error = d_aortic.powi(2) + d_upper.powi(2) + d_lower.powi(2);
 
+        println!("---------------------Finding optimal rotation---------------------");
         println!("angle: {:?}, error: {:?}", angle, total_error);
 
         if total_error < min_total_error {
