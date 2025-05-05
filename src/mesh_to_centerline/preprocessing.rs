@@ -2,14 +2,13 @@ use crate::io::input::read_centerline_txt;
 use crate::io::Geometry;
 use crate::io::load_geometry::rebuild_geometry;
 use crate::io::input::Centerline;
-use std::error::Error;
 
 pub fn prepare_data_3d_alignment(
     state: &str,
     centerline_path: &str,
     input_dir: &str,
     interpolation_steps: usize, 
-) -> Result<(Centerline, Geometry, Geometry), Box<dyn Error>> {
+) -> anyhow::Result<(Centerline, Geometry, Geometry)> {
     // ----- Build the common centerline -----
     let raw_centerline = read_centerline_txt(&centerline_path)?;
     let centerline = Centerline::from_contour_points(raw_centerline);

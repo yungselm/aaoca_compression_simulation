@@ -3,7 +3,6 @@ pub mod load_geometry;
 pub mod output;
 
 use input::{read_records, Contour, ContourPoint, Record};
-use std::error::Error;
 use std::path::Path;
 
 #[derive(Debug, Clone)]
@@ -16,7 +15,7 @@ pub struct Geometry {
 
 impl Geometry {
     /// Creates a new Geometry instance by loading all required data files
-    pub fn new(input_dir: &str, label: String, diastole: bool) -> Result<Self, Box<dyn Error>> {
+    pub fn new(input_dir: &str, label: String, diastole: bool) -> anyhow::Result<Self> {
         let label = if diastole {
             format!("{}_diastole", label)
         } else {
@@ -118,7 +117,7 @@ impl Geometry {
     fn load_contours(
         contour_path: &Path,
         records_path: &Path,
-    ) -> Result<Vec<Contour>, Box<dyn Error>> {
+    ) -> anyhow::Result<Vec<Contour>> {
         let raw_points = ContourPoint::read_contour_data(contour_path)?;
         let results = read_records(records_path)?;
 
@@ -126,11 +125,11 @@ impl Geometry {
         Contour::create_contours(raw_points, results)
     }
 
-    fn load_reference_point(reference_path: &Path) -> Result<ContourPoint, Box<dyn Error>> {
+    fn load_reference_point(reference_path: &Path) -> anyhow::Result<ContourPoint> {
         ContourPoint::read_reference_point(reference_path)
     }
 
-    fn load_results(records_path: &Path) -> Result<Vec<Record>, Box<dyn Error>> {
+    fn load_results(records_path: &Path) -> anyhow::Result<Vec<Record>> {
         read_records(records_path)
     }
 

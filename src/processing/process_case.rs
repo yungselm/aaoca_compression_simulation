@@ -1,5 +1,5 @@
-use std::error::Error;
 use std::path::Path;
+use anyhow::bail;
 
 use crate::io::input::{Contour, ContourPoint};
 use crate::io::output::write_obj_mesh;
@@ -13,7 +13,7 @@ pub fn create_geometry_pair(
     input_dir: &str,
     steps_best_rotation: usize,
     range_rotation_rad: f64,
-) -> Result<GeometryPair, Box<dyn Error>> {
+) -> anyhow::Result<GeometryPair> {
     let geometries = GeometryPair::new(input_dir, case_name.clone())?;
     let mut geometries = geometries.adjust_z_coordinates();
 
@@ -40,7 +40,7 @@ pub fn process_case(
     geometries: GeometryPair,
     output_dir: &str,
     interpolation_steps: usize,
-) -> Result<GeometryPair, Box<dyn Error>> {
+) -> anyhow::Result<GeometryPair> {
     std::fs::create_dir_all(output_dir)?;
 
     let dia_geom = geometries.dia_geom;
@@ -102,7 +102,7 @@ pub fn interpolate_contours(
     start: &Geometry,
     end:   &Geometry,
     steps: usize,
-) -> Result<Vec<Geometry>, Box<dyn Error>> {
+) -> anyhow::Result<Vec<Geometry>> {
     use std::cmp::min;
     let n = min(start.contours.len(), end.contours.len());
     let sc = &start.contours[..n];
@@ -182,7 +182,7 @@ fn interpolate_points(
     end_contours: &[Contour],
     steps: usize,
     n: usize,
-) -> Result<Vec<Contour>, Box<dyn Error>> {
+) -> anyhow::Result<Vec<Contour>> {
     let mut intermediate_contours = Vec::with_capacity(n);
 
     for step in 0..steps {
@@ -191,10 +191,10 @@ fn interpolate_points(
         // Pair matching contours between start and end geometries
         for (start_contour, end_contour) in start_contours.iter().zip(end_contours.iter()) {
             if start_contour.id != end_contour.id {
-                return Err("Contour IDs do not match between start and end geometries".into());
+                bail!("Contour IDs do not match between start and end geometries");
             }
             if start_contour.points.len() != end_contour.points.len() {
-                return Err("Contour point counts do not match between start and end".into());
+                bail!("Contour point counts do not match between start and end");
             }
 
             // Interpolate points between contours

@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use std::error::Error;
 use std::fs;
 
 #[derive(Debug, Deserialize)]
@@ -43,7 +42,7 @@ pub struct AppConfig {
     pub settings: SettingsConfig,
 }
 
-pub fn load_config(path: &str) -> Result<AppConfig, Box<dyn Error>> {
+pub fn load_config(path: &str) -> anyhow::Result<AppConfig> {
     let config_str = fs::read_to_string(path)?;
     let config: AppConfig = toml::from_str(&config_str)?;
     Ok(config)

@@ -85,7 +85,7 @@ fn resample_to_reference_z(
         }
         // Build new Contour
         let centroid = Contour::compute_centroid(&interp_points);
-        let mut new_cont = Contour {
+        let new_cont = Contour {
             id: idx as u32,
             points: interp_points,
             centroid,

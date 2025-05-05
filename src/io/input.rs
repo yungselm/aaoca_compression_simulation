@@ -2,10 +2,10 @@ use csv::ReaderBuilder;
 use nalgebra::Vector3;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::error::Error;
 use std::f64::consts::PI;
 use std::fs::File;
 use std::path::Path;
+use anyhow::{Result, Context, anyhow};
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Contour {
@@ -20,7 +20,7 @@ impl Contour {
     pub fn create_contours(
         points: Vec<ContourPoint>,
         result: Vec<Record>,
-    ) -> Result<Vec<Contour>, Box<dyn Error>> {
+    ) -> anyhow::Result<Vec<Contour>> {
         let mut groups: HashMap<u32, Vec<ContourPoint>> = HashMap::new();
         for p in points {
             groups.entry(p.frame_index).or_default().push(p);
@@ -58,7 +58,7 @@ impl Contour {
 
     pub fn create_catheter_contours(
         points: &Vec<ContourPoint>,
-    ) -> Result<Vec<Contour>, Box<dyn Error>> {
+    ) -> anyhow::Result<Vec<Contour>> {
         let catheter_points = ContourPoint::create_catheter_points(&points);
 
         let mut groups: HashMap<u32, Vec<ContourPoint>> = HashMap::new();
@@ -225,7 +225,7 @@ pub struct ContourPoint {
 
 impl ContourPoint {
     /// Reads contour points from a CSV file.
-    pub fn read_contour_data<P: AsRef<Path> + std::fmt::Debug + Clone>(path: P) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
+    pub fn read_contour_data<P: AsRef<Path> + std::fmt::Debug + Clone>(path: P) -> anyhow::Result<Vec<ContourPoint>> {
         let debug_path = path.clone();
         let file = File::open(path)?;
         let mut rdr = csv::ReaderBuilder::new()
@@ -247,24 +247,34 @@ impl ContourPoint {
         Ok(points)
     }
 
-    pub fn read_reference_point<P: AsRef<Path>>(path: P) -> Result<ContourPoint, Box<dyn Error>> {
-        let file = File::open(path)?;
-        let mut rdr = csv::ReaderBuilder::new()
+    pub fn read_reference_point<P: AsRef<Path>>(path: P) -> Result<ContourPoint> {
+        // 1) Open the file, with context if it fails
+        let file = File::open(&path)
+            .with_context(|| format!("failed to open reference‐point file {:?}", path.as_ref()))?;
+        
+        // 2) Build a TSV reader
+        let mut rdr = ReaderBuilder::new()
             .has_headers(false)
             .delimiter(b'\t')
             .from_reader(file);
-
+    
+        // 3) Iterate records
         for result in rdr.records() {
-            match result {
-                Ok(record) => match record.deserialize(None) {
-                    Ok(point) => return Ok(point),
-                    Err(e) => return Err(Box::new(e)),
-                },
-                Err(e) => return Err(Box::new(e)),
-            }
+            // a) Propagate any I/O or parse errors
+            let record = result
+                .with_context(|| "error reading a CSV record from reference‐point file")?;
+            
+            // b) Deserialize into your struct; propagate errors
+            let point: ContourPoint = record
+                .deserialize(None)
+                .with_context(|| "failed to deserialize CSV record into ContourPoint")?;
+            
+            // c) Return on first successful parse
+            return Ok(point);
         }
-
-        Err("No valid reference point found in file".into())
+    
+        // 4) If we fell through, no record was parsed
+        Err(anyhow!("No valid reference point found in file {:?}", path.as_ref()))
     }
 
     pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
@@ -342,7 +352,7 @@ pub struct Record {
     pub measurement_2: Option<f64>,
 }
 
-pub fn read_records<P: AsRef<Path>>(path: P) -> Result<Vec<Record>, Box<dyn Error>> {
+pub fn read_records<P: AsRef<Path>>(path: P) -> anyhow::Result<Vec<Record>> {
     let file = File::open(path)?;
     let mut reader = ReaderBuilder::new()
         .delimiter(b',')
@@ -401,7 +411,7 @@ impl Centerline {
     }
 }
 
-pub fn read_centerline_txt(path: &str) -> Result<Vec<ContourPoint>, Box<dyn Error>> {
+pub fn read_centerline_txt(path: &str) -> anyhow::Result<Vec<ContourPoint>> {
     let file = File::open(path)?;
     let mut rdr = csv::ReaderBuilder::new()
         .has_headers(false)

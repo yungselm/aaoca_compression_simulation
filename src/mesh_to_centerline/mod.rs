@@ -1,8 +1,6 @@
 pub mod preprocessing;
 pub mod operations;
 
-use std::error::Error;
-
 use preprocessing::{prepare_data_3d_alignment, read_interpolated_meshes};
 use operations::{find_optimal_rotation, get_transformations};
 use crate::io::input::Contour;
@@ -10,7 +8,6 @@ use crate::texture::write_mtl_geometry;
 
 use std::path::Path;
 use crate::io::output::write_obj_mesh;
-use crate::utils::utils::{write_debug_obj_mesh, write_geometry_to_csv};
 
 pub fn create_centerline_aligned_meshes(
     state: &str,
@@ -27,19 +24,9 @@ pub fn create_centerline_aligned_meshes(
     x_coord_lower: f64,
     y_coord_lower: f64,
     z_coord_lower: f64,
-) -> Result<(), Box<dyn Error>> {
-    println!("the input_dir is: {:?}", &input_dir);
-    println!("the output_dir is: {:?}", &output_dir);
+) -> anyhow::Result<()> {
     let (centerline, ref_mesh_dia, ref_mesh_sys) = prepare_data_3d_alignment(state, centerline_path, input_dir, interpolation_steps)?;
     let interpolated_meshes = read_interpolated_meshes(state, input_dir, interpolation_steps);
-
-    if state == "rest" {
-        write_geometry_to_csv("output/debugging/reloaded_geometry_rest_dia.csv", &ref_mesh_sys)?;
-        write_debug_obj_mesh(&ref_mesh_dia.contours, "output/debugging/reloaded_geometry_rest_sys.obj")?;
-        write_debug_obj_mesh(&ref_mesh_sys.catheter, "output/debugging/reloaded_catheter_rest_sys.obj")?;
-    } else {
-        write_geometry_to_csv("output/debugging/reloaded_geometry_stress_sys.csv", &ref_mesh_sys)?;       
-    }
 
     let mut geometries = vec![ref_mesh_dia.clone()];
     geometries.extend(interpolated_meshes);

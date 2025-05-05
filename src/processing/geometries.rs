@@ -2,7 +2,6 @@ use rayon::prelude::*;
 
 use crate::io::Geometry;
 use crate::processing::contours::hausdorff_distance;
-use std::error::Error;
 
 use super::contours::align_frames_in_geometry;
 use crate::io::input::{ContourPoint, Contour};
@@ -13,7 +12,7 @@ pub struct GeometryPair {
 }
 
 impl GeometryPair {
-    pub fn new(input_dir: &str, label: String) -> Result<GeometryPair, Box<dyn Error>> {
+    pub fn new(input_dir: &str, label: String) -> anyhow::Result<GeometryPair> {
         let dia_geom = Geometry::new(input_dir, label.clone(), true)?;
         println!("geometry pair: diastolic geometry generated");
         let sys_geom = Geometry::new(input_dir, label, false)?;
@@ -146,6 +145,7 @@ impl GeometryPair {
             assign_z(self.dia_geom.catheter.get_mut(i));
             assign_z(self.sys_geom.catheter.get_mut(i));
 
+            println!("-------------------------Z-coordinates before adjustment-------------------------");
             println!("layer {} => z = {}", i, current_z);
             current_z += mean_z_coords;
         }
@@ -216,6 +216,8 @@ pub fn find_best_rotation_all(
                 .sum();
 
             let avg_distance = total_distance / diastole.contours.len() as f64;
+
+            println!("---------------------Finding optimal rotation Diastole/Systole---------------------");
             println!("Angle: {:.3} rad, Avg Distance: {:.3}", angle, avg_distance);
             (angle, avg_distance)
         })
