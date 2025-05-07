@@ -6,6 +6,7 @@ use crate::processing::contours::hausdorff_distance;
 use super::contours::align_frames_in_geometry;
 use crate::io::input::{ContourPoint, Contour};
 
+#[derive(Clone)]
 pub struct GeometryPair {
     pub dia_geom: Geometry,
     pub sys_geom: Geometry,
@@ -145,7 +146,6 @@ impl GeometryPair {
             assign_z(self.dia_geom.catheter.get_mut(i));
             assign_z(self.sys_geom.catheter.get_mut(i));
 
-            println!("-------------------------Z-coordinates before adjustment-------------------------");
             println!("layer {} => z = {}", i, current_z);
             current_z += mean_z_coords;
         }
@@ -186,6 +186,7 @@ pub fn find_best_rotation_all(
     steps: usize,
     range: f64,
 ) -> f64 {
+    println!("---------------------Finding optimal rotation Diastole/Systole---------------------");
     let increment = (2.0 * range) / steps as f64;
 
     (0..=steps)
@@ -217,7 +218,6 @@ pub fn find_best_rotation_all(
 
             let avg_distance = total_distance / diastole.contours.len() as f64;
 
-            println!("---------------------Finding optimal rotation Diastole/Systole---------------------");
             println!("Angle: {:.3} rad, Avg Distance: {:.3}", angle, avg_distance);
             (angle, avg_distance)
         })

@@ -169,6 +169,7 @@ pub fn find_optimal_rotation(
     let mut min_total_error = f64::MAX;
 
     let mut angle = 0.0;
+    println!("---------------------Centerline alignment: Finding optimal rotation---------------------");
     while angle < 6.283185 { // maybe better approach then bruteforce, fix later
         let mut temp_frame = contour.clone();
         
@@ -202,7 +203,6 @@ pub fn find_optimal_rotation(
         // Calculate sum of squared errors
         let total_error = d_aortic.powi(2) + d_upper.powi(2) + d_lower.powi(2);
 
-        println!("---------------------Finding optimal rotation---------------------");
         println!("angle: {:?}, error: {:?}", angle, total_error);
 
         if total_error < min_total_error {

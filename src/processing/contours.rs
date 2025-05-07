@@ -37,12 +37,11 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
     let ref_contour_copy = ref_contour.clone();
 
     let ((p1, p2), _dist) = ref_contour_copy.find_farthest_points();
-    let ((p3, p4), _dist) = ref_contour_copy.find_closest_opposite();
-
+    
     // Calculate indices in sorted contour
     let p1_pos = ref_contour_copy.points.iter().position(|pt| pt == p1).unwrap();
     let p2_pos = ref_contour_copy.points.iter().position(|pt| pt == p2).unwrap();
-
+    
     // Create index sets for aortic regions
     let (first_half_indices, second_half_indices) = if p1_pos < p2_pos {
         (
@@ -55,35 +54,41 @@ pub fn align_frames_in_geometry(mut geometry: Geometry, steps: usize, range: f64
             (p2_pos+1..p1_pos).collect()
         )
     };
-
+    
     // Calculate distances using actual positions in sorted contour
     let dist_first: f64 = ref_contour_copy.points.iter().enumerate()
-        .filter(|(i, _)| first_half_indices.contains(i))
-        .map(|(_, p)| p.distance_to(&geometry.reference_point))
-        .sum();
+    .filter(|(i, _)| first_half_indices.contains(i))
+    .map(|(_, p)| p.distance_to(&geometry.reference_point))
+    .sum();
 
     let dist_second: f64 = ref_contour_copy.points.iter().enumerate()
-        .filter(|(i, _)| second_half_indices.contains(i))
-        .map(|(_, p)| p.distance_to(&geometry.reference_point))
-        .sum();
+    .filter(|(i, _)| second_half_indices.contains(i))
+    .map(|(_, p)| p.distance_to(&geometry.reference_point))
+    .sum();
 
     // Assign aortic flags using current indices
     for pt in ref_contour.points.iter_mut() {
         pt.aortic = if dist_first < dist_second {
-            first_half_indices.contains(&(pt.point_index as usize))
-        } else {
-            second_half_indices.contains(&(pt.point_index as usize))
-        };
-    }
-
+                first_half_indices.contains(&(pt.point_index as usize))
+            } else {
+                second_half_indices.contains(&(pt.point_index as usize))
+            };
+        }
+    
     // Find a rotation that makes contour vertical and ensures aortic points are on the right side
     let dx = p2.x - p1.x;
     let dy = p2.y - p1.y;
     let line_angle = dy.atan2(dx);
     let mut rotation_to_y = (PI / 2.0) - line_angle;
+    
+    let ref_contour_copy = ref_contour.clone();
 
+    let ((p3, p4), _dist) = ref_contour_copy.find_closest_opposite();
+    p3.rotate_point(rotation_to_y, (ref_contour_copy.centroid.0, ref_contour_copy.centroid.1));
+    p3.rotate_point(rotation_to_y, (ref_contour_copy.centroid.0, ref_contour_copy.centroid.1));
+    
     // Adjust rotation if necessary to ensure aortic points are on the right side
-    if p3.aortic && p3.x < p4.x {
+    if p4.aortic && p3.x < p4.x {
         rotation_to_y += PI;
     }
 

@@ -17,11 +17,16 @@ reference_point_dia = pd.read_csv("input/rest_csv_files/diastolic_reference_poin
 before_rotation = pd.read_csv("output/debugging/before_rotation_geometry.csv")
 after_rotation = pd.read_csv("output/debugging/after_rotation_geometry.csv")
 
-before_rotation = before_rotation[before_rotation['contour_id'] == 25]
-after_rotation = after_rotation[after_rotation['contour_id'] == 25]
+max_value_before = before_rotation['contour_id'].max()
+max_value_after = after_rotation['contour_id'].max()
 
-data_dia = data_original_dia[data_original_dia['contour_id']==803]
-data_sys = data_original[data_original['contour_id']==661]
+before_rotation = before_rotation[before_rotation['contour_id'] == max_value_before]
+after_rotation = after_rotation[after_rotation['contour_id'] == max_value_after]
+
+# data_dia = data_original_dia[data_original_dia['contour_id']==803]
+# data_sys = data_original[data_original['contour_id']==661]
+data_dia = data_original_dia[data_original_dia['contour_id']==715]
+data_sys = data_original[data_original['contour_id']==688]
 data_dia_reloaded = geometry_reloaded[geometry_reloaded['contour_id']==0]
 
 plt.plot(data_sys['x'], data_sys['y'], 'o', label='diastole', alpha=0.6)
