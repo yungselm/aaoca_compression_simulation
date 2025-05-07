@@ -31,22 +31,21 @@ pub fn compute_uv_coordinates(contours: &Vec<Contour>) -> Vec<(f64, f64)> {
 /// first entry is the displacements for the contours and the second for the
 /// catheter.
 pub fn compute_displacements(mesh: &Geometry, diastole: &Geometry) -> Vec<f64> {
-    let mut displacements_contours = Vec::new();
-
-    // Displacements for contours
-    for (c_idx, contour) in mesh.contours.iter().enumerate() {
-        let diastole_contour = &diastole.contours[c_idx];
-        for (p_idx, point) in contour.points.iter().enumerate() {
-            let diastole_point = &diastole_contour.points[p_idx];
-            let dx = point.x - diastole_point.x;
-            let dy = point.y - diastole_point.y;
-            let dz = point.z - diastole_point.z;
-            let displacement = (dx * dx + dy * dy + dz * dz).sqrt();
-            displacements_contours.push(displacement);
-        }
-    }
-
-    displacements_contours
+    mesh.contours
+        .iter()
+        .zip(diastole.contours.iter())
+        .flat_map(|(contour, diastole_contour)| {
+            contour.points
+                .iter()
+                .zip(diastole_contour.points.iter())
+                .map(|(point, diastole_point)| {
+                    let dx = point.x - diastole_point.x;
+                    let dy = point.y - diastole_point.y;
+                    let dz = point.z - diastole_point.z;
+                    (dx * dx + dy * dy + dz * dz).sqrt()
+                })
+        })
+        .collect()
 }
 
 pub fn create_displacement_texture(
