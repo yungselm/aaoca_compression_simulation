@@ -7,8 +7,6 @@ use crate::io::Geometry;
 use crate::processing::geometries::GeometryPair;
 use crate::texture::write_mtl_geometry;
 
-use crate::utils::utils::write_geometry_to_csv;
-
 pub fn create_geometry_pair(
     case_name: String,
     input_dir: &str,
@@ -19,12 +17,9 @@ pub fn create_geometry_pair(
     println!("-------------------------Z-coordinates before adjustment-------------------------");
     let mut geometries = geometries.adjust_z_coordinates();
 
-    write_geometry_to_csv("output/debugging/before_rotation_geometry.csv", &geometries.dia_geom);
-
     geometries = geometries.process_geometry_pair(steps_best_rotation, range_rotation_rad);
     geometries = geometries.trim_geometries_same_length();
-
-    write_geometry_to_csv("output/debugging/after_rotation_geometry.csv", &geometries.dia_geom.clone());
+    geometries = geometries.thickness_adjustment();
 
     let dia_geom = geometries.dia_geom;
     let dia_geom = dia_geom.smooth_contours();

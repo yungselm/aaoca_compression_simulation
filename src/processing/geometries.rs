@@ -178,6 +178,65 @@ impl GeometryPair {
     
         self
     }
+
+    /// Adjusts the aortic and pulmonary thicknesses of the contours in both geometries
+    /// to be the average of the two. This is done for each contour in both geometries.
+    /// The function ensures that the lengths of the thickness vectors are equal by resizing
+    /// them to the maximum length found in either geometry. The average is calculated
+    /// for each corresponding element in the vectors.
+    /// If one of the elements is None, it takes the value from the other element.
+    /// If both are None, it remains None.
+    /// This function is called after the geometries have been aligned and translated.
+    /// It is important to ensure that the geometries are aligned before calling this function.
+    /// The function assumes that the contours in both geometries are in the same order.
+    /// It does not check for matching IDs, so it is the caller's responsibility to ensure
+    /// that the contours correspond to the same anatomical structures.
+    pub fn thickness_adjustment(mut self) -> GeometryPair {
+        let min_contours = std::cmp::min(self.dia_geom.contours.len(), self.sys_geom.contours.len());
+        for i in 0..min_contours {
+            let dia_contour = &mut self.dia_geom.contours[i];
+            let sys_contour = &mut self.sys_geom.contours[i];
+
+            // Process aortic thickness
+            let max_aortic_len = std::cmp::max(
+                dia_contour.aortic_thickness.len(),
+                sys_contour.aortic_thickness.len(),
+            );
+            dia_contour.aortic_thickness.resize(max_aortic_len, None);
+            sys_contour.aortic_thickness.resize(max_aortic_len, None);
+
+            for j in 0..max_aortic_len {
+                let combined = match (dia_contour.aortic_thickness[j], sys_contour.aortic_thickness[j]) {
+                    (Some(a), Some(b)) => Some((a + b) / 2.0),
+                    (Some(a), None) => Some(a),
+                    (None, Some(b)) => Some(b),
+                    (None, None) => None,
+                };
+                dia_contour.aortic_thickness[j] = combined;
+                sys_contour.aortic_thickness[j] = combined;
+            }
+
+            // Process pulmonary thickness
+            let max_pulmonary_len = std::cmp::max(
+                dia_contour.pulmonary_thickness.len(),
+                sys_contour.pulmonary_thickness.len(),
+            );
+            dia_contour.pulmonary_thickness.resize(max_pulmonary_len, None);
+            sys_contour.pulmonary_thickness.resize(max_pulmonary_len, None);
+
+            for j in 0..max_pulmonary_len {
+                let combined = match (dia_contour.pulmonary_thickness[j], sys_contour.pulmonary_thickness[j]) {
+                    (Some(a), Some(b)) => Some((a + b) / 2.0),
+                    (Some(a), None) => Some(a),
+                    (None, Some(b)) => Some(b),
+                    (None, None) => None,
+                };
+                dia_contour.pulmonary_thickness[j] = combined;
+                sys_contour.pulmonary_thickness[j] = combined;
+            }
+        }
+        self
+    }
 }
 
 pub fn find_best_rotation_all(
