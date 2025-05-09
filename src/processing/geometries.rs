@@ -179,6 +179,30 @@ impl GeometryPair {
         self
     }
 
+    /// Smooths a thickness vector using a moving average over a window of 3 elements (previous, current, next).
+    /// Handles `None` values by ignoring them in the average calculation.
+    fn smooth_thickness_vector(vec: &mut Vec<Option<f64>>) {
+        let original = vec.clone();
+        for i in 0..vec.len() {
+            let mut sum = 0.0;
+            let mut count = 0;
+            // Consider the window around i (previous, current, next)
+            for j in i.saturating_sub(1)..=i+1 {
+                if j < original.len() {
+                    if let Some(val) = original[j] {
+                        sum += val;
+                        count += 1;
+                    }
+                }
+            }
+            vec[i] = if count > 0 {
+                Some(sum / count as f64)
+            } else {
+                None
+            };
+        }
+    }
+
     /// Adjusts the aortic and pulmonary thicknesses of the contours in both geometries
     /// to be the average of the two. This is done for each contour in both geometries.
     /// The function ensures that the lengths of the thickness vectors are equal by resizing
@@ -216,6 +240,10 @@ impl GeometryPair {
                 sys_contour.aortic_thickness[j] = combined;
             }
 
+            // Smooth aortic thickness and sync between geometries
+            Self::smooth_thickness_vector(&mut dia_contour.aortic_thickness);
+            sys_contour.aortic_thickness.clone_from(&dia_contour.aortic_thickness);
+
             // Process pulmonary thickness
             let max_pulmonary_len = std::cmp::max(
                 dia_contour.pulmonary_thickness.len(),
@@ -234,6 +262,10 @@ impl GeometryPair {
                 dia_contour.pulmonary_thickness[j] = combined;
                 sys_contour.pulmonary_thickness[j] = combined;
             }
+
+            // Smooth pulmonary thickness and sync between geometries
+            Self::smooth_thickness_vector(&mut dia_contour.pulmonary_thickness);
+            sys_contour.pulmonary_thickness.clone_from(&dia_contour.pulmonary_thickness);
         }
         self
     }
