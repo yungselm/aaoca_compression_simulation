@@ -38,8 +38,8 @@ pub fn rebuild_geometry(contour_path: &str, catheter_path: &str) -> Geometry {
             id: frame_idx,
             points: Vec::new(), // Will be filled after processing
             centroid,
-            aortic_thickness: Vec::new(),
-            pulmonary_thickness: Vec::new(),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
         };
 
         let mut points = input_points; // Use the input points
@@ -74,8 +74,8 @@ pub fn rebuild_geometry(contour_path: &str, catheter_path: &str) -> Geometry {
             id: frame_idx,
             points: Vec::new(),
             centroid,
-            aortic_thickness: Vec::new(),
-            pulmonary_thickness: Vec::new(),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
         };
 
         let mut points = input_points;

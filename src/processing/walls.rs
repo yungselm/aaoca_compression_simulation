@@ -15,7 +15,7 @@ pub fn create_wall_geometry(
 fn create_wall_contour_aortic_only(
     contour: &Contour,
 ) -> Contour {
-    if contour.aortic_thickness.is_empty() {
+    if contour.aortic_thickness.is_none() {
         let new_contour = enlarge_contour(contour, 1.5, None);
         new_contour
     } else {
@@ -60,8 +60,8 @@ pub fn enlarge_contour(
         id: contour.id,
         points: new_points.collect(),
         centroid: (cx, cy, cz),
-        aortic_thickness: Vec::new(),
-        pulmonary_thickness: Vec::new(),
+        aortic_thickness: contour.aortic_thickness,
+        pulmonary_thickness: contour.pulmonary_thickness,
     }
 }
 
@@ -75,7 +75,7 @@ pub fn enlarge_contour(
 fn create_aortic_wall(contour: &Contour) -> Contour {
     // Key measurements
     let ref_pt    = contour.points[375];
-    let thickness = contour.aortic_thickness[375]
+    let thickness = contour.aortic_thickness
         .expect("aortic_thickness[375] must be Some");
     let outer_x   = ref_pt.x + thickness;
     let y_up      = contour.points[0].y   + 1.5;
@@ -118,7 +118,7 @@ fn create_aortic_wall(contour: &Contour) -> Contour {
         id: contour.id,
         points: new_points,
         centroid: contour.centroid,
-        aortic_thickness: Vec::new(),
-        pulmonary_thickness: Vec::new(),
+        aortic_thickness: contour.aortic_thickness,
+        pulmonary_thickness: contour.pulmonary_thickness,
     }
 }

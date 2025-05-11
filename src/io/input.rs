@@ -12,8 +12,8 @@ pub struct Contour {
     pub id: u32,
     pub points: Vec<ContourPoint>,
     pub centroid: (f64, f64, f64),
-    pub aortic_thickness: Vec<Option<f64>>,
-    pub pulmonary_thickness: Vec<Option<f64>>,
+    pub aortic_thickness: Option<f64>,
+    pub pulmonary_thickness: Option<f64>,
 }
 
 impl Contour {
@@ -43,8 +43,8 @@ impl Contour {
                 id: frame_index,
                 points: group_points,
                 centroid,
-                aortic_thickness: vec![aortic_thickness],
-                pulmonary_thickness: vec![pulmonary_thickness],
+                aortic_thickness: aortic_thickness,
+                pulmonary_thickness: pulmonary_thickness,
             });
 
         for contour in &mut contours {
@@ -76,8 +76,8 @@ impl Contour {
                 id: frame_index,
                 points: group_points,
                 centroid,
-                aortic_thickness: vec![aortic_thickness],
-                pulmonary_thickness: vec![pulmonary_thickness],
+                aortic_thickness: aortic_thickness,
+                pulmonary_thickness: pulmonary_thickness,
             });
         }
         Ok(contours)

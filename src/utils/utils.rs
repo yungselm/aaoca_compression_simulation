@@ -103,9 +103,7 @@ pub fn write_geometry_to_csv<P: AsRef<Path>>(
     // Helper to write from a source (contours or catheter)
     let write_contours = |source: &str, contours: &Vec<Contour>, wtr: &mut Writer<std::fs::File>| -> Result<(), Box<dyn Error>> {
         for contour in contours {
-            for (i, point) in contour.points.iter().enumerate() {
-                let a_thickness = contour.aortic_thickness.get(i).and_then(|x| *x);
-                let p_thickness = contour.pulmonary_thickness.get(i).and_then(|x| *x);
+            for point in contour.points.iter() {
 
                 let record = vec![
                     geometry.label.clone(),
@@ -117,8 +115,8 @@ pub fn write_geometry_to_csv<P: AsRef<Path>>(
                     point.y.to_string(),
                     point.z.to_string(),
                     point.aortic.to_string(),
-                    a_thickness.map_or("".into(), |v| v.to_string()),
-                    p_thickness.map_or("".into(), |v| v.to_string()),
+                    contour.aortic_thickness.map_or("None".to_string(), |v| v.to_string()),
+                    contour.pulmonary_thickness.map_or("None".to_string(), |v| v.to_string()),
                 ];
 
                 wtr.write_record(&record)?;

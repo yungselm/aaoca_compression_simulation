@@ -89,8 +89,8 @@ fn resample_to_reference_z(
             id: idx as u32,
             points: interp_points,
             centroid,
-            aortic_thickness: Vec::new(),
-            pulmonary_thickness: Vec::new(),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
         };
         new_contours.push(new_cont);
     }
@@ -128,8 +128,8 @@ fn resample_to_reference_z(
                 id: idx as u32,
                 points: interp_pts,
                 centroid,
-                aortic_thickness: Vec::new(),
-                pulmonary_thickness: Vec::new(),
+                aortic_thickness: None,
+                pulmonary_thickness: None,
             });
         }
         new_cat

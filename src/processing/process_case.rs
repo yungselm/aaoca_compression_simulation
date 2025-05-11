@@ -158,8 +158,8 @@ pub fn interpolate_contours(
                     s.centroid.1 * (1.0 - t) + e.centroid.1 * t,
                     s.centroid.2 * (1.0 - t) + e.centroid.2 * t,
                 ),
-                aortic_thickness: Vec::new(),
-                pulmonary_thickness: Vec::new(),
+                aortic_thickness: None,
+                pulmonary_thickness: None,
             }
         }).collect();
 
@@ -244,14 +244,14 @@ fn interpolate_points(
     Ok(intermediate_contours)
 }
 
-/// Helper function to interpolate thickness values
-fn interpolate_thickness(start: &[Option<f64>], end: &[Option<f64>], t: f64) -> Vec<Option<f64>> {
-    start
-        .iter()
-        .zip(end.iter())
-        .map(|(s, e)| match (s, e) {
-            (Some(s_val), Some(e_val)) => Some(s_val * (1.0 - t) + e_val * t),
-            _ => None,
-        })
-        .collect()
+/// Interpolate two optional thickness values at fraction `t` (0.0..1.0).
+fn interpolate_thickness(
+    start: &Option<f64>,
+    end:   &Option<f64>,
+    t:     f64,
+) -> Option<f64> {
+    match (start, end) {
+        (Some(s), Some(e)) => Some(s * (1.0 - t) + e * t),
+        _                  => None,
+    }
 }

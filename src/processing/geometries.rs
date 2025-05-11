@@ -179,30 +179,6 @@ impl GeometryPair {
         self
     }
 
-    /// Smooths a thickness vector using a moving average over a window of 3 elements (previous, current, next).
-    /// Handles `None` values by ignoring them in the average calculation.
-    fn smooth_thickness_vector(vec: &mut Vec<Option<f64>>) {
-        let original = vec.clone();
-        for i in 0..vec.len() {
-            let mut sum = 0.0;
-            let mut count = 0;
-            // Consider the window around i (previous, current, next)
-            for j in i.saturating_sub(1)..=i+1 {
-                if j < original.len() {
-                    if let Some(val) = original[j] {
-                        sum += val;
-                        count += 1;
-                    }
-                }
-            }
-            vec[i] = if count > 0 {
-                Some(sum / count as f64)
-            } else {
-                None
-            };
-        }
-    }
-
     /// Adjusts the aortic and pulmonary thicknesses of the contours in both geometries
     /// to be the average of the two. This is done for each contour in both geometries.
     /// The function ensures that the lengths of the thickness vectors are equal by resizing
@@ -216,56 +192,33 @@ impl GeometryPair {
     /// It does not check for matching IDs, so it is the caller's responsibility to ensure
     /// that the contours correspond to the same anatomical structures.
     pub fn thickness_adjustment(mut self) -> GeometryPair {
-        let min_contours = std::cmp::min(self.dia_geom.contours.len(), self.sys_geom.contours.len());
+        let min_contours = std::cmp::min(
+            self.dia_geom.contours.len(),
+            self.sys_geom.contours.len(),
+        );
         for i in 0..min_contours {
-            let dia_contour = &mut self.dia_geom.contours[i];
-            let sys_contour = &mut self.sys_geom.contours[i];
+            let dia = &mut self.dia_geom.contours[i];
+            let sys = &mut self.sys_geom.contours[i];
 
-            // Process aortic thickness
-            let max_aortic_len = std::cmp::max(
-                dia_contour.aortic_thickness.len(),
-                sys_contour.aortic_thickness.len(),
-            );
-            dia_contour.aortic_thickness.resize(max_aortic_len, None);
-            sys_contour.aortic_thickness.resize(max_aortic_len, None);
+            // Combine aortic thickness
+            let combined_aortic = match (dia.aortic_thickness, sys.aortic_thickness) {
+                (Some(a), Some(b)) => Some((a + b) / 2.0),
+                (Some(a), None   ) => Some(a),
+                (None   , Some(b)) => Some(b),
+                (None   , None   ) => None,
+            };
+            dia.aortic_thickness = combined_aortic;
+            sys.aortic_thickness = combined_aortic;
 
-            for j in 0..max_aortic_len {
-                let combined = match (dia_contour.aortic_thickness[j], sys_contour.aortic_thickness[j]) {
-                    (Some(a), Some(b)) => Some((a + b) / 2.0),
-                    (Some(a), None) => Some(a),
-                    (None, Some(b)) => Some(b),
-                    (None, None) => None,
-                };
-                dia_contour.aortic_thickness[j] = combined;
-                sys_contour.aortic_thickness[j] = combined;
-            }
-
-            // Smooth aortic thickness and sync between geometries
-            Self::smooth_thickness_vector(&mut dia_contour.aortic_thickness);
-            sys_contour.aortic_thickness.clone_from(&dia_contour.aortic_thickness);
-
-            // Process pulmonary thickness
-            let max_pulmonary_len = std::cmp::max(
-                dia_contour.pulmonary_thickness.len(),
-                sys_contour.pulmonary_thickness.len(),
-            );
-            dia_contour.pulmonary_thickness.resize(max_pulmonary_len, None);
-            sys_contour.pulmonary_thickness.resize(max_pulmonary_len, None);
-
-            for j in 0..max_pulmonary_len {
-                let combined = match (dia_contour.pulmonary_thickness[j], sys_contour.pulmonary_thickness[j]) {
-                    (Some(a), Some(b)) => Some((a + b) / 2.0),
-                    (Some(a), None) => Some(a),
-                    (None, Some(b)) => Some(b),
-                    (None, None) => None,
-                };
-                dia_contour.pulmonary_thickness[j] = combined;
-                sys_contour.pulmonary_thickness[j] = combined;
-            }
-
-            // Smooth pulmonary thickness and sync between geometries
-            Self::smooth_thickness_vector(&mut dia_contour.pulmonary_thickness);
-            sys_contour.pulmonary_thickness.clone_from(&dia_contour.pulmonary_thickness);
+            // Combine pulmonary thickness
+            let combined_pulmonary = match (dia.pulmonary_thickness, sys.pulmonary_thickness) {
+                (Some(a), Some(b)) => Some((a + b) / 2.0),
+                (Some(a), None   ) => Some(a),
+                (None   , Some(b)) => Some(b),
+                (None   , None   ) => None,
+            };
+            dia.pulmonary_thickness = combined_pulmonary;
+            sys.pulmonary_thickness = combined_pulmonary;
         }
         self
     }
