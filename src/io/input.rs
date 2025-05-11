@@ -208,7 +208,7 @@ impl Contour {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq)]
 pub struct ContourPoint {
     pub frame_index: u32,
 
