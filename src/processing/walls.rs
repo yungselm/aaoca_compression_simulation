@@ -1,15 +1,32 @@
-use anyhow::bail;
 use std::ops::RangeInclusive;
 
 use crate::io::input::{Contour, ContourPoint};
 use crate::io::Geometry;
-use crate::processing::geometries::GeometryPair;
 
 pub fn create_wall_geometry(
     geometry: &Geometry,
     with_pulmonary: bool,
 ) -> Geometry {
-    todo!("processes all contours in the geometry")
+    let mut new_contours = Vec::new();
+
+    for contour in &geometry.contours {
+        let new_contour = if with_pulmonary {
+            create_wall_contour_with_pulmonary(contour)
+        } else {
+            create_wall_contour_aortic_only(contour)
+        };
+
+        new_contours.push(new_contour);
+    }
+
+    let new_geometry = Geometry {
+        contours: new_contours,
+        catheter: geometry.catheter.clone(),
+        reference_point: geometry.reference_point.clone(),
+        label: geometry.label.clone(),
+    };
+
+    new_geometry
 }
 
 fn create_wall_contour_aortic_only(
@@ -19,13 +36,16 @@ fn create_wall_contour_aortic_only(
         let new_contour = enlarge_contour(contour, 1.5, None);
         new_contour
     } else {
-        todo!();
+        let new_contour = create_aortic_wall(contour);
+        new_contour
     }
 }
 
-// fn create_wall_contour_with_pulmonary(
-//     contour: &Contour,
-// ) -> Contour {}
+fn create_wall_contour_with_pulmonary(
+    contour: &Contour,
+) -> Contour {
+    todo!("not yet implemented");
+}
 
 pub fn enlarge_contour(
     contour: &Contour,

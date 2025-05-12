@@ -1,7 +1,10 @@
-use crate::io::input::Contour;
 use anyhow::{bail, anyhow};
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::path::Path;
+
+use crate::io::input::Contour;
+use crate::io::Geometry;
 
 pub fn write_obj_mesh(
     contours: &Vec<Contour>,
@@ -94,5 +97,70 @@ pub fn write_obj_mesh(
     }
 
     println!("OBJ mesh with normals written to {}", filename);
+    Ok(())
+}
+
+#[derive(Copy, Clone)]
+pub enum GeometryType {
+    Contour,
+    Catheter,
+}
+
+impl GeometryType {
+    // Get the contour data from a Geometry based on the enum variant
+    pub fn get_contours<'a>(&self, geometry: &'a Geometry) -> &'a Vec<Contour> {
+        match self {
+            GeometryType::Contour => &geometry.contours,
+            GeometryType::Catheter => &geometry.catheter,
+        }
+    }
+
+    // Get the object string for filenames
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GeometryType::Contour => "mesh",
+            GeometryType::Catheter => "catheter",
+        }
+    }
+}
+
+pub fn write_geometry_vec_to_obj(
+    geometry_type: GeometryType,
+    case_name: &str,
+    output_dir: &str,
+    geometries: &[Geometry],
+    uv_coords: &[Vec<(f64, f64)>],
+) -> anyhow::Result<()> {
+    for (i, (geometry, uv_coords_mesh)) in geometries
+        .iter()
+        .zip(uv_coords.iter())
+        .enumerate()
+    {
+        let obj_filename = format!(
+            "{}_{:03}_{}.obj",
+            geometry_type.as_str(),
+            i,
+            case_name
+        );
+        let mtl_filename = format!(
+            "{}_{:03}_{}.mtl",
+            geometry_type.as_str(),
+            i,
+            case_name
+        );
+        let obj_path = Path::new(output_dir).join(&obj_filename);
+        let obj_path_str = obj_path.to_str()
+            .ok_or_else(|| anyhow!("Invalid path for OBJ file"))?;
+
+        // Get the appropriate contour data (contours or catheter)
+        let contours = geometry_type.get_contours(geometry);
+
+        write_obj_mesh(
+            contours,
+            uv_coords_mesh,
+            obj_path_str,
+            &mtl_filename,
+        ).map_err(|e| anyhow!("Failed to write OBJ mesh: {}", e))?;
+    }
     Ok(())
 }

@@ -2,7 +2,7 @@ use std::path::Path;
 use anyhow::bail;
 
 use crate::io::input::{Contour, ContourPoint};
-use crate::io::output::write_obj_mesh;
+use crate::io::output::{GeometryType, write_geometry_vec_to_obj};
 use crate::io::Geometry;
 use crate::processing::geometries::GeometryPair;
 use crate::texture::write_mtl_geometry;
@@ -54,45 +54,22 @@ pub fn process_case(
     let (uv_coords_contours, uv_coords_catheter) =
         write_mtl_geometry(&interpolated_geometries, output_dir, case_name);
 
-    // Write the interpolated geometries contours to OBJ files
-    for (i, (mesh, uv_coords)) in interpolated_geometries
-        .iter()
-        .zip(uv_coords_contours.iter()) // iterate UVs by reference
-        .enumerate()
-    {
-        let obj_filename = format!("mesh_{:03}_{}.obj", i, case_name);
-        let mtl_filename = format!("mesh_{:03}_{}.mtl", i, case_name);
-        let obj_path = Path::new(output_dir).join(&obj_filename);
-        let obj_path_str = obj_path.to_str().unwrap();
+    // Write contours (mesh) and catheter using the enum
+    write_geometry_vec_to_obj(
+        GeometryType::Contour,
+        case_name,
+        output_dir,
+        &interpolated_geometries,
+        &uv_coords_contours,
+    )?;
 
-        // borrow mesh.contours and pass your &Vec<(f64,f64)> -> &[…] coerces automatically:
-        write_obj_mesh(
-            &mesh.contours, // ← borrow, don’t move
-            uv_coords,      // ← &Vec<(f64,f64)> coerces to &[(f64,f64)]
-            obj_path_str,
-            &mtl_filename,
-        )?;
-    }
-
-    // Write the interpolated geometries catheter to OBJ files
-    for (i, (mesh, uv_coords)) in interpolated_geometries
-        .iter()
-        .zip(uv_coords_catheter.iter()) // iterate UVs by reference
-        .enumerate()
-    {
-        let obj_filename = format!("catheter_{:03}_{}.obj", i, case_name);
-        let mtl_filename = format!("catheter_{:03}_{}.mtl", i, case_name);
-        let obj_path = Path::new(output_dir).join(&obj_filename);
-        let obj_path_str = obj_path.to_str().unwrap();
-
-        // borrow mesh.contours and pass your &Vec<(f64,f64)> -> &[…] coerces automatically:
-        write_obj_mesh(
-            &mesh.catheter, // ← borrow, don’t move
-            uv_coords,      // ← &Vec<(f64,f64)> coerces to &[(f64,f64)]
-            obj_path_str,
-            &mtl_filename,
-        )?;
-    }
+    write_geometry_vec_to_obj(
+        GeometryType::Catheter,
+        case_name,
+        output_dir,
+        &interpolated_geometries,
+        &uv_coords_catheter,
+    )?;
 
     Ok(GeometryPair { dia_geom, sys_geom })
 }
