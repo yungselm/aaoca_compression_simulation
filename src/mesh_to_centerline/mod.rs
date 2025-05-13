@@ -3,10 +3,9 @@ pub mod operations;
 
 use preprocessing::{prepare_data_3d_alignment, read_interpolated_meshes};
 use operations::{find_optimal_rotation, get_transformations};
-use crate::{io::input::Contour, texture::texture::compute_uv_coordinates};
+use crate::io::input::Contour;
 use crate::texture::write_mtl_geometry;
 
-use std::path::Path;
 use crate::io::output::{GeometryType, write_geometry_vec_to_obj};
 
 pub fn create_centerline_aligned_meshes(

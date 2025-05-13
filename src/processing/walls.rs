@@ -33,53 +33,66 @@ fn create_wall_contour_aortic_only(
     contour: &Contour,
 ) -> Contour {
     if contour.aortic_thickness.is_none() {
-        let new_contour = enlarge_contour(contour, 1.5, None);
+        let new_contour = offset_contour(contour, 1.0, None);
         new_contour
     } else {
+        // let new_contour = create_aortic_wall(contour);
         let new_contour = create_aortic_wall(contour);
         new_contour
     }
 }
 
+#[allow(dead_code)]
 fn create_wall_contour_with_pulmonary(
     contour: &Contour,
 ) -> Contour {
     todo!("not yet implemented");
 }
 
-pub fn enlarge_contour(
+/// Offsets every point away from the centroid by exactly `distance` units,
+/// only for those whose `point_index` is in the optional `point_range`.
+/// If `point_range` is `None`, all points get offset.
+pub fn offset_contour(
     contour: &Contour,
-    factor: f64,
+    distance: f64,
     point_range: Option<RangeInclusive<u32>>,
 ) -> Contour {
     let (cx, cy, cz) = contour.centroid;
 
-    let new_points = contour.points.iter().map(|point| {
-        let mut new_point = point.clone();
+    let new_points = contour.points.iter().map(|pt| {
+        let mut p = pt.clone();
 
-        // Only scale if point_index is in the given range (or if no range was passed)
-        let do_scale = point_range
+        let do_offset = point_range
             .as_ref()
-            .map(|r| r.contains(&point.point_index))
+            .map(|r| r.contains(&pt.point_index))
             .unwrap_or(true);
 
-        if do_scale {
-            let dx = point.x - cx;
-            let dy = point.y - cy;
-            let dz = point.z - cz;
+        if do_offset {
+            // vector from centroid → point
+            let dx = pt.x - cx;
+            let dy = pt.y - cy;
+            let dz = pt.z - cz;
 
-            new_point.x = cx + factor * dx;
-            new_point.y = cy + factor * dy;
-            new_point.z = cz + factor * dz;
+            let len = (dx*dx + dy*dy + dz*dz).sqrt();
+            if len > std::f64::EPSILON {
+                // build a unit vector, then add `distance` along it
+                let ux = dx / len;
+                let uy = dy / len;
+                let uz = dz / len;
+
+                p.x += ux * distance;
+                p.y += uy * distance;
+                p.z += uz * distance;
+            }
         }
 
-        new_point
+        p
     });
 
     Contour {
         id: contour.id,
         points: new_points.collect(),
-        centroid: (cx, cy, cz),
+        centroid: contour.centroid,
         aortic_thickness: contour.aortic_thickness,
         pulmonary_thickness: contour.pulmonary_thickness,
     }
@@ -94,45 +107,85 @@ pub fn enlarge_contour(
 /// For easier geometry creation again 500 points are used.
 fn create_aortic_wall(contour: &Contour) -> Contour {
     // Key measurements
-    let ref_pt    = contour.points[375];
+    let ref_pt = &contour.points[375];
     let thickness = contour.aortic_thickness
-        .expect("aortic_thickness[375] must be Some");
-    let outer_x   = ref_pt.x + thickness;
-    let y_up      = contour.points[0].y   + 1.5;
-    let y_low     = contour.points[250].y - 1.5;
+        .expect("aortic_thickness must be present for this contour");
+    let outer_x = ref_pt.x + thickness;
+    let z = ref_pt.z;
 
-    // Left half: indices 0..=250 inclusive
-    let left_wall = enlarge_contour(contour, 1.5, Some(0..=250)).points;
-    let left_len  = left_wall.len();            // 251
+    // Define key points (x, y)
+    let up_mid = (contour.points[0].x, contour.points[0].y + 1.0);
+    let up_right = (outer_x, up_mid.1);
+    let low_mid = (contour.points[250].x, contour.points[250].y - 1.0);
+    let low_right = (outer_x, low_mid.1);
 
-    // Total length of your new contour = original contour length
-    let total_pts = contour.points.len();       // 501
-    let right_len = total_pts - left_len;       // 250
+    // Calculate segment lengths for point distribution
+    let dist_up = (up_right.0 - up_mid.0).abs();
+    let dist_right = (up_right.1 - low_right.1).abs();
+    let dist_low = (low_right.0 - low_mid.0).abs();
+    let total_dist = dist_up + dist_right + dist_low;
 
-    // Right half: interpolate between (outer_x, y_up) → (outer_x, y_low)
-    let mut right_wall = Vec::with_capacity(right_len);
-    for i in 0..right_len {
-        // t = 0.0 .. 1.0 over 250 points
-        let t = i as f64 / (right_len - 1) as f64;
-        let y = y_up * (1.0 - t) + y_low * t;
+    // Allocate points proportionally (sum must be 250)
+    let n_points_up = (dist_up / total_dist * 250.0).round() as usize;
+    let n_points_mid = (dist_right / total_dist * 250.0).round() as usize;
+    let mut n_points_low = 250 - n_points_up - n_points_mid;
 
-        // original source point to copy frame_index, point_index, z, aortic flag
-        let src = &contour.points[left_len + i];
+    // Ensure we have exactly 250 points total
+    let total = n_points_up + n_points_mid + n_points_low;
+    if total != 250 {
+        n_points_low += 250 - total; // Distribute remaining points to low segment
+    }
 
-        right_wall.push( ContourPoint {
+    // Generate points for each segment
+    let mut right_points = Vec::with_capacity(250);
+
+    // 1. Horizontal line: low_mid to low_right
+    for i in 0..n_points_low {
+        let t = i as f64 / (n_points_low - 1) as f64;
+        let x = low_mid.0 + t * (low_right.0 - low_mid.0);
+        right_points.push((x, low_mid.1));
+    }
+
+    // 2. Vertical line: low_right to up_right
+    for i in 0..n_points_mid {
+        let t = i as f64 / (n_points_mid - 1) as f64;
+        let y = low_right.1 + t * (up_right.1 - low_right.1);
+        right_points.push((low_right.0, y));
+    }
+
+    // 3. Horizontal line: up_right to up_mid
+    for i in 0..n_points_up {
+        let t = i as f64 / (n_points_up.max(1) - 1) as f64;
+        let x = up_right.0 - t * (up_right.0 - up_mid.0);
+        right_points.push((x, up_right.1));
+    }
+
+    // Create the contour points
+    let mut left_wall = offset_contour(contour, 1.0, Some(0..=250)).points;
+    left_wall.truncate(251);        // now left_wall.len() == 251
+    let left_len = left_wall.len(); // == 251
+    
+    let mut right_wall = Vec::with_capacity(250);
+    for (i, (x, y)) in right_points.into_iter().enumerate() {
+        // Use safe index calculation
+        let src_index = left_len + i;
+        assert!(src_index < contour.points.len(), "Index out of bounds: {} >= {}", src_index, contour.points.len());
+        
+        let src = &contour.points[src_index];
+        right_wall.push(ContourPoint {
             frame_index: src.frame_index,
             point_index: src.point_index,
-            x: outer_x,
+            x,
             y,
-            z: src.z,
+            z,
             aortic: src.aortic,
         });
     }
 
-    // Stitch them together
-    let mut new_points = Vec::with_capacity(total_pts);
-    new_points.extend(left_wall.into_iter());
-    new_points.extend(right_wall.into_iter());
+    // Combine both halves
+    let mut new_points = Vec::with_capacity(contour.points.len());
+    new_points.extend(left_wall);
+    new_points.extend(right_wall);
 
     Contour {
         id: contour.id,

@@ -1,4 +1,3 @@
-use std::path::Path;
 use anyhow::bail;
 
 use crate::io::input::{Contour, ContourPoint};
@@ -6,6 +5,7 @@ use crate::io::output::{GeometryType, write_geometry_vec_to_obj};
 use crate::io::Geometry;
 use crate::processing::geometries::GeometryPair;
 use crate::texture::write_mtl_geometry;
+use crate::processing::walls::create_wall_geometry;
 
 pub fn create_geometry_pair(
     case_name: String,
@@ -46,6 +46,10 @@ pub fn process_case(
 
     let dia_geom = geometries.dia_geom;
     let sys_geom = geometries.sys_geom;
+
+    // test wall mesh
+    let dia_geom = create_wall_geometry(&dia_geom, false);
+    let sys_geom = create_wall_geometry(&sys_geom, false);
 
     // Interpolate between diastolic and systolic geometries
     let interpolated_geometries =
