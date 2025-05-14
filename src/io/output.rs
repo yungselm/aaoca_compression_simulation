@@ -104,6 +104,7 @@ pub fn write_obj_mesh(
 pub enum GeometryType {
     Contour,
     Catheter,
+    Wall,
 }
 
 impl GeometryType {
@@ -112,6 +113,7 @@ impl GeometryType {
         match self {
             GeometryType::Contour => &geometry.contours,
             GeometryType::Catheter => &geometry.catheter,
+            GeometryType::Wall => &geometry.contours,
         }
     }
 
@@ -120,6 +122,7 @@ impl GeometryType {
         match self {
             GeometryType::Contour => "mesh",
             GeometryType::Catheter => "catheter",
+            GeometryType::Wall => "wall",
         }
     }
 }

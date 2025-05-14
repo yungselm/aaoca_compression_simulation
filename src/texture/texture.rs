@@ -1,5 +1,5 @@
 use crate::io::{input::Contour, Geometry};
-use image::{ImageBuffer, Rgb};
+use image::{ImageBuffer, Rgb, Rgba};
 use std::error::Error;
 
 pub fn compute_uv_coordinates(contours: &Vec<Contour>) -> Vec<(f64, f64)> {
@@ -76,5 +76,18 @@ pub fn create_black_texture(width: u32, height: u32, filename: &str) -> Result<(
     let black = Rgb([0u8, 0u8, 0u8]); // Ensure pixel values are u8
     let img = ImageBuffer::from_pixel(width, height, black);
     img.save(filename)?; // Save as PNG
+    Ok(())
+}
+
+pub fn create_transparent_texture(
+    width: u32,
+    height: u32,
+    percent_transparent: f64,
+    filename: &str,
+) -> Result<(), Box<dyn Error>> {
+    let transparency_value = (255.0 - (percent_transparent * 255.0)) as u8;
+    let semi_transparent = Rgba([0u8, 0u8, 0u8, transparency_value]);
+    let img = ImageBuffer::from_pixel(width, height, semi_transparent);
+    img.save(filename)?;
     Ok(())
 }

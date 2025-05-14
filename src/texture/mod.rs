@@ -6,7 +6,7 @@ use ::std::io::Write;
 use std::path::Path;
 use texture::{
     compute_displacements, compute_uv_coordinates, create_black_texture,
-    create_displacement_texture,
+    create_displacement_texture, create_transparent_texture,
 };
 
 pub fn write_mtl_geometry(
@@ -104,4 +104,51 @@ pub fn write_mtl_geometry(
     }
 
     (uv_coords_contours, uv_coords_catheter)
+}
+
+pub fn write_mtl_wall(
+    walls_to_process: &Vec<Geometry>,
+    output_dir: &str,
+    case_name: &str,    
+) -> Vec<Vec<(f64, f64)>> {
+    let mut uv_coords_walls = Vec::new();
+
+    // for catheter no displacement uv texture needed
+    for (i, wall) in walls_to_process.into_iter().enumerate() {
+        let uv_coords = compute_uv_coordinates(&wall.contours);
+
+        let texture_height = wall.contours.len() as u32;
+        let texture_width = if texture_height > 0 {
+            wall.contours[0].points.len() as u32
+        } else {
+            0
+        };
+
+        // Fixed (black) texture.
+        let tex_filename = format!("wall_{:03}_{}.png", i, case_name);
+        let texture_path = Path::new(output_dir).join(&tex_filename);
+        create_transparent_texture(
+            texture_width,
+            texture_height,
+            0.7,
+            texture_path.to_str().unwrap(),
+        )
+        .unwrap();
+
+        // Write the material file (MTL).
+        let mtl_filename = format!("wall_{:03}_{}.mtl", i, case_name);
+        let mtl_path = Path::new(output_dir).join(&mtl_filename);
+        let mut mtl_file = File::create(&mtl_path).unwrap();
+        // Set both ambient and diffuse to black.
+        writeln!(
+            mtl_file,
+            "newmtl black_material\nKa 0 0 0\nKd 0 0 0\nmap_Kd {}",
+            tex_filename
+        )
+        .unwrap();
+
+        uv_coords_walls.push(uv_coords)
+    }
+
+    uv_coords_walls
 }

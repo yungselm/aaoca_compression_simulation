@@ -4,7 +4,7 @@ use crate::io::input::{Contour, ContourPoint};
 use crate::io::output::{GeometryType, write_geometry_vec_to_obj};
 use crate::io::Geometry;
 use crate::processing::geometries::GeometryPair;
-use crate::texture::write_mtl_geometry;
+use crate::texture::{write_mtl_geometry, write_mtl_wall};
 use crate::processing::walls::create_wall_geometry;
 
 pub fn create_geometry_pair(
@@ -46,18 +46,14 @@ pub fn process_case(
 
     let dia_geom = geometries.dia_geom;
     let sys_geom = geometries.sys_geom;
-
-    // test wall mesh
-    let dia_geom = create_wall_geometry(&dia_geom, false);
-    let sys_geom = create_wall_geometry(&sys_geom, false);
-
+    
     // Interpolate between diastolic and systolic geometries
     let interpolated_geometries =
-        interpolate_contours(&dia_geom, &sys_geom, interpolation_steps.clone())?;
-
+    interpolate_contours(&dia_geom, &sys_geom, interpolation_steps.clone())?;
+    
     let (uv_coords_contours, uv_coords_catheter) =
-        write_mtl_geometry(&interpolated_geometries, output_dir, case_name);
-
+    write_mtl_geometry(&interpolated_geometries, output_dir, case_name);
+    
     // Write contours (mesh) and catheter using the enum
     write_geometry_vec_to_obj(
         GeometryType::Contour,
@@ -66,7 +62,7 @@ pub fn process_case(
         &interpolated_geometries,
         &uv_coords_contours,
     )?;
-
+    
     write_geometry_vec_to_obj(
         GeometryType::Catheter,
         case_name,
@@ -75,6 +71,23 @@ pub fn process_case(
         &uv_coords_catheter,
     )?;
 
+    // test wall mesh
+    let dia_wall = create_wall_geometry(&dia_geom, false);
+    let sys_wall = create_wall_geometry(&sys_geom, false);
+
+    let interpolated_walls = 
+    interpolate_contours(&dia_wall, &sys_wall, interpolation_steps.clone())?;
+
+    let uv_coords_walls = write_mtl_wall(&interpolated_walls, output_dir, case_name);
+
+    write_geometry_vec_to_obj(
+        GeometryType::Wall,
+        case_name,
+        output_dir,
+        &interpolated_walls,
+        &uv_coords_walls,
+    )?;
+    
     Ok(GeometryPair { dia_geom, sys_geom })
 }
 
