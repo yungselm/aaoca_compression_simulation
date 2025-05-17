@@ -79,40 +79,116 @@ class GeometryAssembler:
         self.z_coords_dia, self.z_coords_sys = self.calculate_z_coords()
         self.geom_dia: List[Contour] = []  # list to hold Contour instances for DIA
         self.geom_sys: List[Contour] = []  # list to hold Contour instances for SYS
+        self.reference_dia = None
+        self.reference_sys = None
 
     def __call__(self):
         self.create_geoms()
+        self.create_reference_points()
+        print(self.reference_dia)
         self._plot_contour()
 
     def create_geoms(self):
-        for (idx, ellip, area, aortic, pulmonary, z, t, r) in zip(
-                self.idx_dia_rest_sorted,
-                self.ellip_dia_rest,
-                self.area_dia_rest,
-                self.aortic_dia_rest,
-                self.pulmonary_dia_rest,
-                self.z_coords_dia,
-                self.translations_dia_rest,
-                self.rotations_dia_rest
-            ):
-            new_contour = Contour()
-            x, y = self.create_ellipse(area, ellip)
+        """
+        Build both DIA and SYS contour lists in one loop.
+        """
+        # clear any existing contours
+        self.geom_dia.clear()
+        self.geom_sys.clear()
 
-            new_contour.idx = idx
-            new_contour.points_x = x.tolist()
-            new_contour.points_y = y.tolist()
-            new_contour.points_z = float(z)
-            new_contour.aortic_thickness = aortic
-            new_contour.pulmonary_thickness = pulmonary
-            new_contour.calculate_centroid()
+        # zip all DIA params together, and all SYS params together
+        dia_iter = zip(
+            self.idx_dia_rest_sorted,
+            self.ellip_dia_rest,
+            self.area_dia_rest,
+            self.aortic_dia_rest,
+            self.pulmonary_dia_rest,
+            self.z_coords_dia,
+            self.translations_dia_rest,
+            self.rotations_dia_rest
+        )
+        sys_iter = zip(
+            self.idx_sys_rest_sorted,
+            self.ellip_sys_rest,
+            self.area_sys_rest,
+            self.aortic_sys_rest,
+            self.pulmonary_sys_rest,
+            self.z_coords_sys,
+            self.translations_sys_rest,
+            self.rotations_sys_rest
+        )
 
-            # apply per-contour translation and rotation
-            self._translate_single(new_contour, t)
-            self._rotate_single(new_contour, r)
-            # recompute centroid after transform
-            new_contour.calculate_centroid()
+        for dia_params, sys_params in zip(dia_iter, sys_iter):
+            # build one DIA contour
+            contour_dia = self._make_contour(*dia_params)
+            self.geom_dia.append(contour_dia)
 
-            self.geom_dia.append(new_contour)
+            # build one SYS contour
+            contour_sys = self._make_contour(*sys_params)
+            self.geom_sys.append(contour_sys)
+
+    def create_reference_points(self):
+        """
+        Compute reference points for DIA and SYS by translating and then rotating
+        the base point (7.5, 4.5) around each contour's centroid.
+        """
+        idx_dia = len(self.geom_dia) - 1
+        idx_sys = len(self.geom_sys) - 1
+        base = np.array([6.5, 4.5])
+
+        def _compute_ref(idx, geom_list, translations, rotations):
+            z = geom_list[idx].points_z
+            pt = base.copy()
+            dx, dy = translations[idx]
+            pt += np.array([dx, dy])
+            pivot = np.array(geom_list[idx].centroid[:2])
+            θ = np.deg2rad(rotations[idx])
+            c, s = np.cos(θ), np.sin(θ)
+            rel = pt - pivot
+            rot = np.array([rel[0] * c - rel[1] * s,
+                            rel[0] * s + rel[1] * c])
+            final = pivot + rot
+            return (final[0], final[1], float(z))
+
+        self.reference_dia = _compute_ref(idx_dia, self.geom_dia, self.translations_dia_rest, self.rotations_dia_rest)
+        self.reference_sys = _compute_ref(idx_sys, self.geom_sys, self.translations_sys_rest, self.rotations_sys_rest)
+        return self.reference_dia, self.reference_sys
+
+    def _make_contour(self,
+                      idx: int,
+                      elliptic_ratio: float,
+                      area: float,
+                      aortic_thickness: float,
+                      pulmonary_thickness: float,
+                      z: float,
+                      translation: Tuple[float,float],
+                      rotation: float) -> Contour:
+        """
+        Helper to construct a single Contour from the given parameters,
+        apply translation & rotation, then recompute centroid.
+        """
+        c = Contour()
+        c.idx = idx
+
+        # create base ellipse
+        x, y = self.create_ellipse(area, elliptic_ratio)
+        c.points_x = x.tolist()
+        c.points_y = y.tolist()
+        c.points_z = float(z)
+        c.aortic_thickness = aortic_thickness
+        c.pulmonary_thickness = pulmonary_thickness
+
+        # initial centroid
+        c.calculate_centroid()
+
+        # transform
+        self._translate_single(c, translation)
+        self._rotate_single(c, rotation)
+
+        # updated centroid
+        c.calculate_centroid()
+
+        return c
 
     def calculate_z_coords(self):
         """
@@ -124,7 +200,7 @@ class GeometryAssembler:
             dist_mm = frame_diffs / self.frame_rate * self.pullback_speed
             return np.cumsum(dist_mm)
 
-        return _compute_z(np.sort(self.idx_dia_rest_sorted)), _compute_z(np.sort(self.idx_sys_rest_sorted))
+        return _compute_z(self.idx_dia_rest_sorted), _compute_z(self.idx_sys_rest_sorted)
 
     def create_ellipse(self, area, elliptic_ratio, num_points=501) -> Tuple[np.ndarray, np.ndarray]:
         a = np.sqrt(area / (np.pi * elliptic_ratio))
@@ -160,6 +236,7 @@ class GeometryAssembler:
             return
         contour = self.geom_dia[len(self.geom_dia) - 1]
         plt.scatter(contour.points_x, contour.points_y)
+        plt.scatter(self.reference_dia[0], self.reference_dia[1])
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.xlim(0, 9)
