@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from typing import Tuple, List
+
 from config import (
     FRAME_RATE,
     PULLBACK_SPEED,
@@ -21,6 +23,10 @@ from config import (
     AORTIC_SYS_REST,
     PULMONARY_DIA_REST,
     PULMONARY_SYS_REST,
+    TRANSLATION_DIA_REST,
+    TRANSLATION_SYS_REST,
+    ROTATION_DIA_REST,
+    ROTATION_SYS_REST,
 )
 
 
@@ -32,6 +38,19 @@ class Contour:
         self.points_z = []
         self.aortic_thickness = None
         self.pulmonary_thickness = None
+        self.centroid = None
+
+    def calculate_centroid(self):
+        if len(self.points_x) == 0 or len(self.points_y) == 0:
+            self.centroid = None
+            return
+        x = np.array(self.points_x)
+        y = np.array(self.points_y)
+        # z may be scalar or array
+        z_arr = (np.array(self.points_z)
+                 if isinstance(self.points_z, (list, np.ndarray)) else
+                 np.full_like(x, self.points_z))
+        self.centroid = (x.mean(), y.mean(), z_arr.mean())
 
 
 class GeometryAssembler:
@@ -52,33 +71,46 @@ class GeometryAssembler:
         self.aortic_sys_rest = AORTIC_SYS_REST
         self.pulmonary_dia_rest = PULMONARY_DIA_REST
         self.pulmonary_sys_rest = PULMONARY_SYS_REST
+        self.translations_dia_rest = TRANSLATION_DIA_REST
+        self.translations_sys_rest = TRANSLATION_SYS_REST
+        self.rotations_dia_rest = ROTATION_DIA_REST
+        self.rotations_sys_rest = ROTATION_SYS_REST
         # initialize empty lists for contours
         self.z_coords_dia, self.z_coords_sys = self.calculate_z_coords()
-        self.geom_dia = []  # list to hold Contour instances for DIA
-        self.geom_sys = []  # list to hold Contour instances for SYS
+        self.geom_dia: List[Contour] = []  # list to hold Contour instances for DIA
+        self.geom_sys: List[Contour] = []  # list to hold Contour instances for SYS
 
     def __call__(self):
         self.create_geoms()
         self._plot_contour()
 
     def create_geoms(self):
-        for (idx, ellip, area, aortic, pulmonary, z) in zip(
+        for (idx, ellip, area, aortic, pulmonary, z, t, r) in zip(
                 self.idx_dia_rest_sorted,
                 self.ellip_dia_rest,
                 self.area_dia_rest,
                 self.aortic_dia_rest,
                 self.pulmonary_dia_rest,
                 self.z_coords_dia,
+                self.translations_dia_rest,
+                self.rotations_dia_rest
             ):
             new_contour = Contour()
             x, y = self.create_ellipse(area, ellip)
 
             new_contour.idx = idx
-            new_contour.points_x = x
-            new_contour.points_y = y
-            new_contour.points_z = z  # scalar or list as needed
+            new_contour.points_x = x.tolist()
+            new_contour.points_y = y.tolist()
+            new_contour.points_z = float(z)
             new_contour.aortic_thickness = aortic
             new_contour.pulmonary_thickness = pulmonary
+            new_contour.calculate_centroid()
+
+            # apply per-contour translation and rotation
+            self._translate_single(new_contour, t)
+            self._rotate_single(new_contour, r)
+            # recompute centroid after transform
+            new_contour.calculate_centroid()
 
             self.geom_dia.append(new_contour)
 
@@ -88,33 +120,45 @@ class GeometryAssembler:
         pullback distance (in mm) at each contour index. The first entry in each array is 0.0.
         """
         def _compute_z(idxs):
-            # frame-to-frame differences, with first diff = 0
             frame_diffs = np.diff(idxs, prepend=idxs[0])
-            # convert frame diffs → time (s) → distance (mm)
             dist_mm = frame_diffs / self.frame_rate * self.pullback_speed
-            # cumulative sum so z[0] == 0.0
             return np.cumsum(dist_mm)
 
-        z_coords_dia = _compute_z(self.idx_dia_rest_sorted)
-        z_coords_sys = _compute_z(self.idx_sys_rest_sorted)
-        return z_coords_dia, z_coords_sys
+        return _compute_z(np.sort(self.idx_dia_rest_sorted)), _compute_z(np.sort(self.idx_sys_rest_sorted))
 
-    def create_ellipse(self, area, elliptic_ratio, num_points=501):
-        """
-        Create an ellipse given the area and elliptic ratio, centered at (4.5, 4.5).
-        """
+    def create_ellipse(self, area, elliptic_ratio, num_points=501) -> Tuple[np.ndarray, np.ndarray]:
         a = np.sqrt(area / (np.pi * elliptic_ratio))
         b = elliptic_ratio * a
         t = np.linspace(0, 2 * np.pi, num_points)
-        x = a * np.cos(t) + 4.5
-        y = b * np.sin(t) + 4.5
-        return x, y
+        return a * np.cos(t) + 4.5, b * np.sin(t) + 4.5
+
+    def _translate_single(self, contour: Contour, translation: Tuple[float, float]):
+        dx, dy = translation
+        contour.points_x = (np.array(contour.points_x) + dx).tolist()
+        contour.points_y = (np.array(contour.points_y) + dy).tolist()
+        if contour.centroid is not None:
+            cx, cy, cz = contour.centroid
+            contour.centroid = (cx + dx, cy + dy, cz)
+
+    def _rotate_single(self, contour: Contour, degree: float):
+        θ = np.deg2rad(degree)
+        c, s = np.cos(θ), np.sin(θ)
+        if contour.centroid is None:
+            contour.calculate_centroid()
+        cx, cy, _ = contour.centroid
+
+        x = np.array(contour.points_x) - cx
+        y = np.array(contour.points_y) - cy
+        x_rot = x * c - y * s
+        y_rot = x * s + y * c
+
+        contour.points_x = (x_rot + cx).tolist()
+        contour.points_y = (y_rot + cy).tolist()
 
     def _plot_contour(self):
-        # plot the first DIA contour
         if not self.geom_dia:
             return
-        contour = self.geom_dia[20]
+        contour = self.geom_dia[len(self.geom_dia) - 1]
         plt.scatter(contour.points_x, contour.points_y)
         plt.xlabel('X')
         plt.ylabel('Y')

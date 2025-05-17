@@ -1,3 +1,6 @@
+import numpy as np
+
+
 FRAME_RATE = 30
 PULLBACK_SPEED = 1.0
 START_DIA = 22.0
@@ -19,3 +22,15 @@ AORTIC_SYS_REST = [None, None, None, None, None, None, None, 1.7, 1.6, 1.5, 1.5,
 
 PULMONARY_DIA_REST = [None, None, None, None, None, None, None, None, 2.2, 1.9, 2.0, 1.9, 1.9, 1.8, 1.9, 1.9, 1.8, 1.8, 1.7, 1.9, 1.7, 1.9, 1.6]
 PULMONARY_SYS_REST = [None, None, None, None, None, None, None, None, None, None, None, 2.0, 2.0, 1.9, 1.8, 1.6, 1.8, 1.8, 1.7, 1.9, 1.6, 1.5, 1.2]
+
+# make a 5×5 grid of values between -2.0 and +2.0
+_vals = np.linspace(-1.0, 1.0, 5)
+_all_pairs = [(float(x), float(y)) for x in _vals for y in _vals]
+
+# pick exactly as many as you need (23)
+TRANSLATION_DIA_REST = _all_pairs[:len(IDX_DIA_REST_SORTED)]
+TRANSLATION_SYS_REST = _all_pairs[:len(IDX_SYS_REST_SORTED)]
+TRANSLATION_DIA_REST[-1] = (0, 0)
+
+ROTATION_DIA_REST = [260, 270, 280, 290, 300, 310, 320, 330, 340, 350, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+ROTATION_SYS_REST = [230, 240, 250, 260, 270, 280, 290, 300, 310, 320, 330, 340, 350, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90]
