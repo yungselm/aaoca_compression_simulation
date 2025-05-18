@@ -25,7 +25,7 @@ from config import (
 )
 
 def write_contours(geom: List[Contour],
-                   out_dir: str        = "test_geometries/output",
+                   out_dir: str        = "python_src/test_geometries/output",
                    out_name: str       = "contours.csv",
                    sep: str            = "\t",
                    include_header: bool= False) -> None:
@@ -83,7 +83,7 @@ def write_contours(geom: List[Contour],
 
 def write_reference_point(
     ref_pt: Tuple[float, float, float, float],
-    out_dir: str        = "test_geometries/output",
+    out_dir: str        = "python_src/test_geometries/output",
     out_name: str       = "reference_point.csv",
     sep: str            = "\t",
     include_header: bool= False
@@ -126,7 +126,7 @@ def write_reference_point(
 
 
 def write_full_csv(
-    out_dir: str        = "test_geometries/output",
+    out_dir: str        = "python_src/test_geometries/output",
     out_name: str       = "full_measurements.csv",
     sep: str            = ",",
     include_header: bool= True,

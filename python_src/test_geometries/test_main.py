@@ -15,26 +15,26 @@ def main():
 
     write_contours(
         geom_dia_rest,
-        out_dir="test_geometries/output/rest_csv_files",
+        out_dir="python_src/test_geometries/output/rest_csv_files",
         out_name="diastolic_contours.csv",
     )
     write_contours(
         geom_sys_rest,
-        out_dir="test_geometries/output/rest_csv_files",
+        out_dir="python_src/test_geometries/output/rest_csv_files",
         out_name="systolic_contours.csv",
     )
     write_reference_point(
         ref_dia_rest,
-        out_dir="test_geometries/output/rest_csv_files",
+        out_dir="python_src/test_geometries/output/rest_csv_files",
         out_name="diastolic_reference_points.csv",
     )
     write_reference_point(
         ref_sys_rest,
-        out_dir="test_geometries/output/rest_csv_files",
+        out_dir="python_src/test_geometries/output/rest_csv_files",
         out_name="systolic_reference_points.csv",
     )
     write_full_csv(
-        out_dir="test_geometries/output/rest_csv_files",
+        out_dir="python_src/test_geometries/output/rest_csv_files",
         out_name="combined_sorted_manual.csv",
     )
 
@@ -44,26 +44,26 @@ def main():
 
     write_contours(
         geom_dia_stress,
-        out_dir="test_geometries/output/stress_csv_files",
+        out_dir="python_src/test_geometries/output/stress_csv_files",
         out_name="diastolic_contours.csv",
     )
     write_contours(
         geom_sys_stress,
-        out_dir="test_geometries/output/stress_csv_files",
+        out_dir="python_src/test_geometries/output/stress_csv_files",
         out_name="systolic_contours.csv",
     )
     write_reference_point(
         ref_dia_stress,
-        out_dir="test_geometries/output/stress_csv_files",
+        out_dir="python_src/test_geometries/output/stress_csv_files",
         out_name="diastolic_reference_points.csv",
     )
     write_reference_point(
         ref_sys_stress,
-        out_dir="test_geometries/output/stress_csv_files",
+        out_dir="python_src/test_geometries/output/stress_csv_files",
         out_name="systolic_reference_points.csv",
     )
     write_full_csv(
-        out_dir="test_geometries/output/stress_csv_files",
+        out_dir="python_src/test_geometries/output/stress_csv_files",
         out_name="combined_sorted_manual.csv",
         mode='stress'
     )
