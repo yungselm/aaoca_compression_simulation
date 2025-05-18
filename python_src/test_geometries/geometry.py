@@ -162,7 +162,10 @@ class GeometryAssembler:
         idx_sys = len(self.geom_sys) - 1
         base = np.array([6.5, 4.5])
 
-        def _compute_ref(idx, geom_list, translations, rotations):
+        max_idx_dia = max(c.idx for c in self.geom_dia)
+        max_idx_sys = max(c.idx for c in self.geom_sys)
+
+        def _compute_ref(idx, max_idx, geom_list, translations, rotations):
             z = geom_list[idx].points_z
             pt = base.copy()
             dx, dy = translations[idx]
@@ -174,10 +177,10 @@ class GeometryAssembler:
             rot = np.array([rel[0] * c - rel[1] * s,
                             rel[0] * s + rel[1] * c])
             final = pivot + rot
-            return (final[0], final[1], float(z))
+            return (max_idx, final[0], final[1], float(z))
 
-        self.reference_dia = _compute_ref(idx_dia, self.geom_dia, self.translations_dia_rest, self.rotations_dia_rest)
-        self.reference_sys = _compute_ref(idx_sys, self.geom_sys, self.translations_sys_rest, self.rotations_sys_rest)
+        self.reference_dia = _compute_ref(idx_dia, max_idx_dia, self.geom_dia, self.translations_dia_rest, self.rotations_dia_rest)
+        self.reference_sys = _compute_ref(idx_sys, max_idx_sys, self.geom_sys, self.translations_sys_rest, self.rotations_sys_rest)
         return self.reference_dia, self.reference_sys
 
     def _make_contour(self,
@@ -262,7 +265,7 @@ class GeometryAssembler:
             return
         contour = self.geom_dia[len(self.geom_dia) - 1]
         plt.scatter(contour.points_x, contour.points_y)
-        plt.scatter(self.reference_dia[0], self.reference_dia[1])
+        plt.scatter(self.reference_dia[1], self.reference_dia[2])
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.xlim(0, 9)

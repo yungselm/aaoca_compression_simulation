@@ -325,7 +325,6 @@ ROTATION_SYS_REST = [
 # Settings for stress
 IDX_DIA_STRESS_SORTED = np.arange(226, 226 + 10 * 40, 10).tolist()
 IDX_SYS_STRESS_SORTED = np.arange(205, 205 + 10 * 40, 10).tolist()
-
 # switch positions of elements
 i, j, k = 39, 30, 27
 temp = IDX_DIA_STRESS_SORTED[i]
