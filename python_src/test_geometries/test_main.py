@@ -65,6 +65,7 @@ def main():
     write_full_csv(
         out_dir="test_geometries/output/stress_csv_files",
         out_name="combined_sorted_manual.csv",
+        mode='stress'
     )
 
 

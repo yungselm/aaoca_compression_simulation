@@ -338,23 +338,26 @@ IDX_SYS_STRESS_SORTED[i] = IDX_SYS_STRESS_SORTED[k]
 IDX_SYS_STRESS_SORTED[k] = IDX_SYS_STRESS_SORTED[j]
 IDX_SYS_STRESS_SORTED[j] = temp
 
-ELLIP_DIA_STRESS = np.arange(1.1, 2.5, 0.1).tolist()
-ELLIP_SYS_STRESS = np.arange(1.1, 3.5, 0.1).tolist()
+N = len(IDX_DIA_STRESS_SORTED)
 
-AREA_DIA_STRESS = np.arange(13.5, 4.4, -0.1).tolist()
-AREA_SYS_STRESS = np.arange(13, 3.9, -0.1).tolist()
+ELLIP_DIA_STRESS = np.linspace(1.1, 2.5, N).tolist()
+ELLIP_SYS_STRESS = np.linspace(1.1, 3.5, N).tolist()
+
+AREA_DIA_STRESS = np.linspace(13.5, 4.4, N).tolist()
+AREA_SYS_STRESS = np.linspace(13.0, 3.9, N).tolist()
 
 AORTIC_DIA_STRESS = [None] * 10 + AORTIC_DIA_REST + [1.3, 1.4, 1.2, 1.7, 1.5, 1.5, 1.6]
 AORTIC_SYS_STRESS = [None] * 10 + AORTIC_SYS_REST + [1.5, 1.5, 1.7, 1.3, 1.6, 1.4, 1.5]
 
-PULMONARY_DIA_STRESS = [None] + PULMONARY_DIA_REST + [1.7, 2.0, 1.8, 2.1, 1.9, 1.8, 1.3]
-PULMONARY_SYS_STRESS = [None] + PULMONARY_SYS_REST + [1.9, 1.9, 2.0, 2.0, 1.7, 1.2, 2.1]
+PULMONARY_DIA_STRESS = [None] * 10 + PULMONARY_DIA_REST + [1.7, 2.0, 1.8, 2.1, 1.9, 1.8, 1.3]
+PULMONARY_SYS_STRESS = [None] * 10 + PULMONARY_SYS_REST + [1.9, 1.9, 2.0, 2.0, 1.7, 1.2, 2.1]
 
-_vals = np.linspace(-1.0, 1.0, 5)
+n = int(np.ceil(np.sqrt(len(IDX_DIA_STRESS_SORTED))))
+_vals = np.linspace(-1.0, 1.0, n)
 _all_pairs = [(float(x), float(y)) for x in _vals for y in _vals]
 
-# pick exactly as many as you need (23)
-TRANSLATION_DIA_STRESS= _all_pairs[: len(IDX_DIA_STRESS_SORTED)]
+# Assign translations for stress
+TRANSLATION_DIA_STRESS = _all_pairs[: len(IDX_DIA_STRESS_SORTED)]
 TRANSLATION_SYS_STRESS = _all_pairs[: len(IDX_SYS_STRESS_SORTED)]
 TRANSLATION_DIA_STRESS[-1] = (0, 0)
 

@@ -15,6 +15,13 @@ from config import (
     PULMONARY_DIA_REST, PULMONARY_SYS_REST,
     TRANSLATION_DIA_REST, TRANSLATION_SYS_REST,
     ROTATION_DIA_REST, ROTATION_SYS_REST,
+    IDX_DIA_STRESS_SORTED, IDX_SYS_STRESS_SORTED,
+    ELLIP_DIA_STRESS, ELLIP_SYS_STRESS,
+    AREA_DIA_STRESS, AREA_SYS_STRESS,
+    AORTIC_DIA_STRESS, AORTIC_SYS_STRESS,
+    PULMONARY_DIA_STRESS, PULMONARY_SYS_STRESS,
+    TRANSLATION_DIA_STRESS, TRANSLATION_SYS_STRESS,
+    ROTATION_DIA_STRESS, ROTATION_SYS_STRESS,
 )
 
 def write_contours(geom: List[Contour],
@@ -122,13 +129,17 @@ def write_full_csv(
     out_dir: str        = "test_geometries/output",
     out_name: str       = "full_measurements.csv",
     sep: str            = ",",
-    include_header: bool= True
+    include_header: bool= True,
+    mode: str           = 'rest'
 ) -> None:
     """
     Build a combined DIA+SYS table with all requested columns.
     """
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, out_name)
+
+    asm = GeometryAssembler(mode=mode)
+    z_coords_dia, z_coords_sys = asm.calculate_z_coords()
 
     rows = []
 
@@ -142,7 +153,7 @@ def write_full_csv(
         rots:            List[float],
         phase_label:     str
     ):
-        z_coords = GeometryAssembler(mode="rest").calculate_z_coords()[0 if phase_label=="D" else 1]
+        z_coords = z_coords_dia if phase_label == "D" else z_coords_sys
         start_frame = idx_list[0]
 
         for pos, frame in enumerate(idx_list):
@@ -178,29 +189,56 @@ def write_full_csv(
                 "frame_rate": FRAME_RATE
             })
 
-    # DIA
-    process_phase(
-        IDX_DIA_REST_SORTED,
-        ELLIP_DIA_REST,
-        AREA_DIA_REST,
-        AORTIC_DIA_REST,
-        PULMONARY_DIA_REST,
-        TRANSLATION_DIA_REST,
-        ROTATION_DIA_REST,
-        phase_label="D"
-    )
+    if mode == 'rest':
+        # DIA
+        process_phase(
+            IDX_DIA_REST_SORTED,
+            ELLIP_DIA_REST,
+            AREA_DIA_REST,
+            AORTIC_DIA_REST,
+            PULMONARY_DIA_REST,
+            TRANSLATION_DIA_REST,
+            ROTATION_DIA_REST,
+            phase_label="D"
+        )
 
-    # SYS
-    process_phase(
-        IDX_SYS_REST_SORTED,
-        ELLIP_SYS_REST,
-        AREA_SYS_REST,
-        AORTIC_SYS_REST,
-        PULMONARY_SYS_REST,
-        TRANSLATION_SYS_REST,
-        ROTATION_SYS_REST,
-        phase_label="S"
-    )
+        # SYS
+        process_phase(
+            IDX_SYS_REST_SORTED,
+            ELLIP_SYS_REST,
+            AREA_SYS_REST,
+            AORTIC_SYS_REST,
+            PULMONARY_SYS_REST,
+            TRANSLATION_SYS_REST,
+            ROTATION_SYS_REST,
+            phase_label="S"
+        )
+    elif mode == 'stress':
+        # DIA
+        process_phase(
+            IDX_DIA_STRESS_SORTED,
+            ELLIP_DIA_STRESS,
+            AREA_DIA_STRESS,
+            AORTIC_DIA_STRESS,
+            PULMONARY_DIA_STRESS,
+            TRANSLATION_DIA_STRESS,
+            ROTATION_DIA_STRESS,
+            phase_label="D"
+        )
+
+        # SYS
+        process_phase(
+            IDX_SYS_STRESS_SORTED,
+            ELLIP_SYS_STRESS,
+            AREA_SYS_STRESS,
+            AORTIC_SYS_STRESS,
+            PULMONARY_SYS_STRESS,
+            TRANSLATION_SYS_STRESS,
+            ROTATION_SYS_STRESS,
+            phase_label="S"
+        )
+    else:
+        print("Either mode == 'rest' or mode == 'stress'")
 
     # dump to DataFrame
     df = pd.DataFrame(rows)
