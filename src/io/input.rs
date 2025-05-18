@@ -440,3 +440,202 @@ pub fn read_centerline_txt(path: &str) -> anyhow::Result<Vec<ContourPoint>> {
     }
     Ok(points)
 }
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_centroid() {
+        let points = vec![
+            ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 0.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 1, x: 2.0, y: 0.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 2, x: 2.0, y: 2.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 3, x: 0.0, y: 2.0, z: 0.0, aortic: false },
+        ];
+        let centroid = Contour::compute_centroid(&points);
+        assert_eq!(centroid, (1.0, 1.0, 0.0));
+    }
+
+    #[test]
+    fn test_find_farthest_points() {
+        let contour = Contour {
+            id: 1,
+            points: vec![
+                ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 1, x: 2.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 2, x: 2.0, y: 2.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 3, x: 0.0, y: 2.0, z: 0.0, aortic: false },
+            ],
+            centroid: (1.0, 1.0, 0.0),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
+        };
+        let (pair, distance) = contour.find_farthest_points();
+        assert!((distance - (8.0_f64).sqrt()).abs() < 1e-6);
+        assert!(
+            (pair.0.x == 0.0 && pair.0.y == 0.0 && pair.1.x == 2.0 && pair.1.y == 2.0) ||
+            (pair.0.x == 2.0 && pair.0.y == 2.0 && pair.1.x == 0.0 && pair.1.y == 0.0)
+        );
+    }
+
+    #[test]
+    fn test_find_closest_opposite() {
+        let contour = Contour {
+            id: 1,
+            points: vec![
+                ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 1.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 1, x: 1.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 2, x: 0.0, y: -0.5, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 3, x: -1.0, y: 0.0, z: 0.0, aortic: false },
+            ],
+            centroid: Contour::compute_centroid(&vec![
+                ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 1.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 1, x: 1.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 2, x: 0.0, y: -0.5, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 3, x: -1.0, y: 0.0, z: 0.0, aortic: false },
+            ]),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
+        };
+        let (pair, distance) = contour.find_closest_opposite();
+        assert!((distance - 1.5).abs() < 1e-6);
+        let p0 = &contour.points[0];
+        let p2 = &contour.points[2];
+        assert!(
+            (pair.0 == p0 && pair.1 == p2) || (pair.0 == p2 && pair.1 == p0)
+        );
+    }
+
+    #[test]
+    fn test_rotate_contour() {
+        let mut contour = Contour {
+            id: 1,
+            points: vec![
+                ContourPoint { frame_index: 1, point_index: 0, x: 2.0, y: 1.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 1, x: 1.0, y: 2.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 2, x: 0.0, y: 1.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 3, x: 1.0, y: 0.0, z: 0.0, aortic: false },
+            ],
+            centroid: (1.0, 1.0, 0.0),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
+        };
+        contour.rotate_contour(PI / 2.0);
+        let expected_points = vec![
+            ContourPoint { frame_index: 1, point_index: 0, x: 1.0, y: 2.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 1, x: 0.0, y: 1.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 2, x: 1.0, y: 0.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 3, x: 2.0, y: 1.0, z: 0.0, aortic: false },
+        ];
+        for (i, point) in contour.points.iter().enumerate() {
+            assert!((point.x - expected_points[i].x).abs() < 1e-6);
+            assert!((point.y - expected_points[i].y).abs() < 1e-6);
+        }
+    }    
+
+    #[test]
+    fn test_sort_contour_points() {
+        let mut contour = Contour {
+            id: 1,
+            points: vec![
+                ContourPoint { frame_index: 1, point_index: 0, x: -2.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 1, x: 0.0, y: 2.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 2, x: 2.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 3, x: 0.0, y: -2.0, z: 0.0, aortic: false },
+            ],
+            centroid: (0.0, 0.0, 0.0),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
+        };
+        contour.sort_contour_points();
+        // let expected_order = vec![0.0, 2.0, 0.0, -2.0, -2.0, 0.0, 2.0, 0.0];
+        for (i, point) in contour.points.iter().enumerate() {
+            match i {
+                0 => {
+                    assert!((point.x - 0.0).abs() < 1e-6);
+                    assert!((point.y - 2.0).abs() < 1e-6);
+                },
+                1 => {
+                    assert!((point.x - (-2.0)).abs() < 1e-6);
+                    assert!((point.y - 0.0).abs() < 1e-6);
+                },
+                2 => {
+                    assert!((point.x - 0.0).abs() < 1e-6);
+                    assert!((point.y - (-2.0)).abs() < 1e-6);
+                },
+                3 => {
+                    assert!((point.x - 2.0).abs() < 1e-6);
+                    assert!((point.y - 0.0).abs() < 1e-6);
+                },
+                _ => panic!("Unexpected index"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_translate_contour() {
+        let mut contour = Contour {
+            id: 1,
+            points: vec![
+                ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 1, x: 2.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 2, x: 2.0, y: 2.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 3, x: 0.0, y: 2.0, z: 0.0, aortic: false },
+            ],
+            centroid: (1.0, 1.0, 0.0),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
+        };
+        contour.translate_contour((1.0, 2.0, 3.0));
+        assert_eq!(contour.centroid, (2.0, 3.0, 3.0));
+        for point in contour.points {
+            assert_eq!(point.z, 3.0);
+        }
+    }
+
+    #[test]
+    fn test_contour_point_distance() {
+        let p1 = ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 0.0, z: 0.0, aortic: false };
+        let p2 = ContourPoint { frame_index: 1, point_index: 1, x: 3.0, y: 4.0, z: 0.0, aortic: false };
+        assert!((p1.distance_to(&p2) - 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_rotate_point() {
+        let p = ContourPoint { frame_index: 1, point_index: 0, x: 1.0, y: 0.0, z: 0.0, aortic: false };
+        let rotated = p.rotate_point(PI / 2.0, (0.0, 0.0));
+        assert!((rotated.x - 0.0).abs() < 1e-6);
+        assert!((rotated.y - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_create_catheter_points() {
+        let points = vec![
+            ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 0.0, z: 5.0, aortic: false },
+        ];
+        let catheter_points = ContourPoint::create_catheter_points(&points);
+        assert_eq!(catheter_points.len(), 20);
+        for point in catheter_points {
+            assert_eq!(point.frame_index, 1);
+            assert_eq!(point.z, 5.0);
+            let dx = point.x - 4.5;
+            let dy = point.y - 4.5;
+            let dist = (dx * dx + dy * dy).sqrt();
+            assert!((dist - 0.5).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn test_centerline_normals() {
+        let points = vec![
+            ContourPoint { frame_index: 1, point_index: 0, x: 0.0, y: 0.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 2, point_index: 1, x: 1.0, y: 0.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 3, point_index: 2, x: 2.0, y: 0.0, z: 0.0, aortic: false },
+        ];
+        let centerline = Centerline::from_contour_points(points);
+        assert_eq!(centerline.points[0].normal, Vector3::new(1.0, 0.0, 0.0));
+        assert_eq!(centerline.points[1].normal, Vector3::new(1.0, 0.0, 0.0));
+        assert_eq!(centerline.points[2].normal, Vector3::new(1.0, 0.0, 0.0));
+    }
+}

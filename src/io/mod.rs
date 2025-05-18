@@ -207,3 +207,151 @@ impl Geometry {
         self
     }
 }
+
+#[cfg(test)]
+mod geometry_tests {
+    use super::*;
+    use approx::assert_relative_eq;
+    use serde_json::Value;
+    use std::fs::File;
+    use std::path::Path;
+
+    const NUM_POINTS_CATHETER: usize = 20;  // From Python config
+
+    fn load_test_manifest(mode: &str) -> Value {
+        let manifest_path = format!(
+            "python_src/test_geometries/output/{}_csv_files/test_manifest.json", 
+            mode
+        );
+        let file = File::open(manifest_path).expect("Failed to open manifest");
+        serde_json::from_reader(file).expect("Failed to parse manifest")
+    }
+
+    impl Contour {
+        // Add elliptic ratio calculation to Contour
+        pub fn elliptic_ratio(&self) -> f64 {
+            let (_farthest_pair, max_dist) = self.find_farthest_points();
+            let (_closest_pair, min_dist) = self.find_closest_opposite();
+            
+            // Implementation based on your Python geometry calculations
+            (max_dist / 2.0) / (min_dist / 2.0)
+        }
+
+        // Add area calculation to Contour
+        pub fn area(&self) -> f64 {
+            // Implement your area calculation logic here
+            // Based on Python's create_ellipse function:
+            // area = π * a * b where a and b are semi-axes
+            let (a, b) = self.semi_axes();
+            std::f64::consts::PI * a * b
+        }
+
+        fn semi_axes(&self) -> (f64, f64) {
+            let (_farthest_pair, max_dist) = self.find_farthest_points();
+            let (_closest_pair, min_dist) = self.find_closest_opposite();
+            (max_dist / 2.0, min_dist / 2.0)
+        }
+    }
+
+    #[test]
+    fn test_rest_diastolic_config_match() {
+        let geometry = Geometry::new(
+            "python_src/test_geometries/output/rest_csv_files",
+            "test".to_string(),
+            true
+        ).expect("Failed to load geometry");
+        
+        let manifest = load_test_manifest("rest");
+        let dia_config = &manifest["dia"];
+
+        // Test contour count
+        assert_eq!(
+            geometry.contours.len(), 
+            dia_config["num_contours"].as_u64().unwrap() as usize,
+            "Contour count mismatch"
+        );
+
+        // Test frame indices ordering
+        let expected_indices: Vec<u32> = (0..=22).collect();
+        
+        let actual_indices: Vec<u32> = geometry.contours.iter()
+            .map(|c| c.id)
+            .collect();
+
+        assert_eq!(
+            actual_indices, expected_indices,
+            "Frame indices ordering mismatch"
+        );
+    }
+
+    #[test]
+    fn test_contour_property_consistency() {
+        let geometry = Geometry::new(
+            "python_src/test_geometries/output/rest_csv_files",
+            "test".to_string(),
+            true
+        ).expect("Failed to load geometry");
+        
+        let manifest = load_test_manifest("rest");
+        let dia_config = &manifest["dia"];
+
+        for (i, contour) in geometry.contours.iter().enumerate() {
+            // Verify elliptic ratio
+            let expected_ratio = dia_config["elliptic_ratios"][i].as_f64().unwrap();
+            println!("Expected ratio: {:?}", &expected_ratio);
+            println!("Actual ratio: {:?}", &contour.elliptic_ratio());
+            assert_relative_eq!(
+                contour.elliptic_ratio(),
+                expected_ratio,
+                epsilon = 0.1  // Allow some tolerance
+            );
+
+            // Verify area
+            let expected_area = dia_config["areas"][i].as_f64().unwrap();
+            assert_relative_eq!(
+                contour.area(),
+                expected_area,
+                epsilon = 0.1
+            );
+
+            // Verify aortic thickness
+            let expected_thickness = match dia_config["aortic_thickness"][i].as_f64() {
+                Some(v) => Some(v),
+                None => None,
+            };
+            assert_eq!(
+                contour.aortic_thickness, 
+                expected_thickness,
+                "Aortic thickness mismatch at index {}",
+                i
+            );
+        }
+    }
+
+    #[test]
+    fn test_catheter_contour_properties() {
+        let geometry = Geometry::new(
+            "python_src/test_geometries/output/rest_csv_files",
+            "test".to_string(),
+            true
+        ).expect("Failed to load geometry");
+
+        // Verify number of catheter points per contour
+        for catheter_contour in &geometry.catheter {
+            assert_eq!(
+                catheter_contour.points.len(),
+                NUM_POINTS_CATHETER,
+                "Incorrect number of catheter points"
+            );
+        }
+
+        // Verify z-coordinate consistency
+        for (contour, catheter) in geometry.contours.iter().zip(&geometry.catheter) {
+            assert_relative_eq!(
+                catheter.centroid.2,
+                contour.centroid.2,
+                epsilon = 1e-6
+            );
+        }
+    }
+}
