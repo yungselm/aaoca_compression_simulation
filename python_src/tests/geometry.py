@@ -9,8 +9,6 @@ from typing import Tuple, List
 from config import (
     FRAME_RATE,
     PULLBACK_SPEED,
-    START_DIA,
-    START_SYS,
     NUM_POINTS_CONTOUR,
     NUM_POINTS_CATHETER,
     IDX_DIA_REST_SORTED,
@@ -27,6 +25,20 @@ from config import (
     TRANSLATION_SYS_REST,
     ROTATION_DIA_REST,
     ROTATION_SYS_REST,
+    IDX_DIA_STRESS_SORTED,
+    IDX_SYS_STRESS_SORTED,
+    ELLIP_DIA_STRESS,
+    ELLIP_SYS_STRESS,
+    AREA_DIA_STRESS,
+    AREA_SYS_STRESS,
+    AORTIC_DIA_STRESS,
+    AORTIC_SYS_STRESS,
+    PULMONARY_DIA_STRESS,
+    PULMONARY_SYS_STRESS,
+    TRANSLATION_DIA_STRESS,
+    TRANSLATION_SYS_STRESS,
+    ROTATION_DIA_STRESS,
+    ROTATION_SYS_STRESS,
 )
 
 
@@ -54,27 +66,41 @@ class Contour:
 
 
 class GeometryAssembler:
-    def __init__(self):
+    def __init__(self, mode='rest'):
         self.frame_rate = FRAME_RATE
         self.pullback_speed = PULLBACK_SPEED
-        self.start_dia = START_DIA
-        self.start_sys = START_SYS
         self.num_points_contour = NUM_POINTS_CONTOUR
         self.num_points_catheter = NUM_POINTS_CATHETER
-        self.idx_dia_rest_sorted = IDX_DIA_REST_SORTED
-        self.idx_sys_rest_sorted = IDX_SYS_REST_SORTED
-        self.ellip_dia_rest = ELLIP_DIA_REST
-        self.ellip_sys_rest = ELLIP_SYS_REST
-        self.area_dia_rest = AREA_DIA_REST
-        self.area_sys_rest = AREA_SYS_REST
-        self.aortic_dia_rest = AORTIC_DIA_REST
-        self.aortic_sys_rest = AORTIC_SYS_REST
-        self.pulmonary_dia_rest = PULMONARY_DIA_REST
-        self.pulmonary_sys_rest = PULMONARY_SYS_REST
-        self.translations_dia_rest = TRANSLATION_DIA_REST
-        self.translations_sys_rest = TRANSLATION_SYS_REST
-        self.rotations_dia_rest = ROTATION_DIA_REST
-        self.rotations_sys_rest = ROTATION_SYS_REST
+        if mode == 'rest':
+            self.idx_dia_rest_sorted = IDX_DIA_REST_SORTED
+            self.idx_sys_rest_sorted = IDX_SYS_REST_SORTED
+            self.ellip_dia_rest = ELLIP_DIA_REST
+            self.ellip_sys_rest = ELLIP_SYS_REST
+            self.area_dia_rest = AREA_DIA_REST
+            self.area_sys_rest = AREA_SYS_REST
+            self.aortic_dia_rest = AORTIC_DIA_REST
+            self.aortic_sys_rest = AORTIC_SYS_REST
+            self.pulmonary_dia_rest = PULMONARY_DIA_REST
+            self.pulmonary_sys_rest = PULMONARY_SYS_REST
+            self.translations_dia_rest = TRANSLATION_DIA_REST
+            self.translations_sys_rest = TRANSLATION_SYS_REST
+            self.rotations_dia_rest = ROTATION_DIA_REST
+            self.rotations_sys_rest = ROTATION_SYS_REST
+        if mode == 'stress':
+            self.idx_dia_rest_sorted = IDX_DIA_STRESS_SORTED
+            self.idx_sys_rest_sorted = IDX_SYS_STRESS_SORTED
+            self.ellip_dia_rest = ELLIP_DIA_STRESS
+            self.ellip_sys_rest = ELLIP_SYS_STRESS
+            self.area_dia_rest = AREA_DIA_STRESS
+            self.area_sys_rest = AREA_SYS_STRESS
+            self.aortic_dia_rest = AORTIC_DIA_STRESS
+            self.aortic_sys_rest = AORTIC_SYS_STRESS
+            self.pulmonary_dia_rest = PULMONARY_DIA_STRESS
+            self.pulmonary_sys_rest = PULMONARY_SYS_STRESS
+            self.translations_dia_rest = TRANSLATION_DIA_STRESS
+            self.translations_sys_rest = TRANSLATION_SYS_STRESS
+            self.rotations_dia_rest = ROTATION_DIA_STRESS
+            self.rotations_sys_rest = ROTATION_SYS_STRESS
         # initialize empty lists for contours
         self.z_coords_dia, self.z_coords_sys = self.calculate_z_coords()
         self.geom_dia: List[Contour] = []  # list to hold Contour instances for DIA
@@ -85,8 +111,8 @@ class GeometryAssembler:
     def __call__(self):
         self.create_geoms()
         self.create_reference_points()
-        print(self.reference_dia)
         self._plot_contour()
+        return self.reference_dia, self.geom_dia, self.reference_sys, self.geom_sys
 
     def create_geoms(self):
         """
