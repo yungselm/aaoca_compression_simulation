@@ -112,13 +112,6 @@ impl Geometry {
             .map(|r| r.frame)
             .collect();
 
-        println!("Records id order: {:?}", &filtered);
-        let mut original_contour_ids = Vec::new();
-        for c in contours.iter() {
-            original_contour_ids.push(c.id)
-        }
-        println!("Original contour id order: {:?}", original_contour_ids);
-
         // Sort contours to match filtered record frame order
         contours.sort_by_key(|c| {
             filtered
@@ -126,12 +119,6 @@ impl Geometry {
                 .position(|&f| f == c.id)
                 .unwrap_or(usize::MAX)
         });
-
-        let mut post_contour_ids = Vec::new();
-        for c in contours.iter() {
-            post_contour_ids.push(c.id)
-        }
-        println!("Post contour id order: {:?}", post_contour_ids);
 
         // Update the z-coordinates of contours and their points using z_coords
         for (i, contour) in contours.iter_mut().enumerate() {
@@ -342,7 +329,18 @@ mod geometry_tests {
         let manifest = load_test_manifest("rest");
         let dia_config = &manifest["dia"];
 
-        for (i, contour) in geometry.contours.iter().enumerate().rev() {
+        println!("Elliptic ratios manifest: {:?}", dia_config["elliptic_ratios"]);
+        let mut elliptic_ratios_contours = Vec::new();
+        let mut contour_ids = Vec::new();
+        for c in geometry.contours.iter() {
+            let ellip = c.elliptic_ratio();
+            elliptic_ratios_contours.push(ellip);
+            contour_ids.push(c.id);
+        }
+        println!("Contour ids: {:?}", contour_ids);
+        println!("Contour elliptic ratio: {:?}", elliptic_ratios_contours);
+
+        for (i, contour) in geometry.contours.iter().enumerate() {
             // Verify elliptic ratio
             let expected_ratio = dia_config["elliptic_ratios"][i].as_f64().unwrap();
             assert_relative_eq!(

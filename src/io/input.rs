@@ -111,35 +111,61 @@ impl Contour {
         (farthest_pair, max_dist)
     }
 
-    /// Find the closest opposite points on a contour, where "opposite" means a point
-    /// and the point halfway around the contour vector (e.g., 0 with n/2, 1 with n/2+1, etc.).
-    /// If the number of points in the contour is odd, the function will ignore the last point.
-    /// Expects an ordered contour.
+    /// Find the pair of points whose chord is the smallest diameter,
+    /// by matching each point to the one whose angle (about the centroid)
+    /// differs by as close to π radians as possible.
     pub fn find_closest_opposite(&self) -> ((&ContourPoint, &ContourPoint), f64) {
-        
         let n = self.points.len();
-        // If odd, ignore the last point
-        let effective_n = if n % 2 == 0 { n } else { n - 1 };
-        if effective_n < 2 {
-            panic!("Not enough points to evaluate");
-        }
+        assert!(n > 2, "Need at least 3 points");
 
-        let half = effective_n / 2;
+        // 1) Compute centroid (x0,y0)
+        let (cx, cy, _) = self.centroid;
+
+        // 2) Precompute angles
+        let thetas: Vec<f64> = self.points.iter()
+            .map(|p| {
+                let mut t = (p.y - cy).atan2(p.x - cx);
+                if t < 0.0 { t += 2.0 * std::f64::consts::PI; }
+                t
+            })
+            .collect();
+
         let mut min_dist = f64::MAX;
-        let mut closest_pair = (&self.points[0], &self.points[half]);
+        let mut best_pair = (&self.points[0], &self.points[1]);
 
-        for i in 0..half {
-            let j = i + half; // Directly opposite index (ignoring the extra odd element)
-            let dx = self.points[i].x - self.points[j].x;
-            let dy = self.points[i].y - self.points[j].y;
-            let dist = (dx * dx + dy * dy).sqrt(); // Euclidean distance
+        // 3) Brute‐force: for each i, find j that best approximates θi+π
+        for i in 0..n {
+            // let target = (thetas[i] + std::f64::consts::PI) % (2.0 * std::f64::consts::PI);
+            let mut best_angle_diff = f64::MAX;
+            let mut best_j = i;
 
+            for j in 0..n {
+                if j == i { continue; }
+                // compute angular separation in [0,2π)
+                let mut delta = (thetas[j] - thetas[i]).abs();
+                if delta > std::f64::consts::PI {
+                    delta = 2.0 * std::f64::consts::PI - delta;
+                }
+                let diff = (delta - std::f64::consts::PI).abs();
+                if diff < best_angle_diff {
+                    best_angle_diff = diff;
+                    best_j = j;
+                }
+            }
+
+            // 4) Compute chord length between i and best_j
+            let pi = &self.points[i];
+            let pj = &self.points[best_j];
+            let dx = pi.x - pj.x;
+            let dy = pi.y - pj.y;
+            let dist = (dx*dx + dy*dy).sqrt();
             if dist < min_dist {
                 min_dist = dist;
-                closest_pair = (&self.points[i], &self.points[j]);
+                best_pair = (pi, pj);
             }
         }
-        (closest_pair, min_dist)
+
+        (best_pair, min_dist)
     }
 
     pub fn rotate_contour(&mut self, angle: f64) {
