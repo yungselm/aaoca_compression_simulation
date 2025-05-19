@@ -311,8 +311,8 @@ class GeometryAssembler:
     def _plot_contour(self):
         if not self.geom_dia:
             return
-        # contour = self.geom_dia[len(self.geom_dia) - 1]
-        contour = self.geom_dia[0]
+        contour = self.geom_dia[len(self.geom_dia) - 1]
+        # contour = self.geom_dia[0]
         plt.scatter(contour.points_x, contour.points_y)
         plt.scatter(self.reference_dia[1], self.reference_dia[2])
         plt.xlabel('X')

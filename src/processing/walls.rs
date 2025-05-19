@@ -44,7 +44,7 @@ fn create_wall_contour_aortic_only(
 
 #[allow(dead_code)]
 fn create_wall_contour_with_pulmonary(
-    contour: &Contour,
+    _contour: &Contour,
 ) -> Contour {
     todo!("not yet implemented");
 }

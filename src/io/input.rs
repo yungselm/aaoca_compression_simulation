@@ -563,6 +563,51 @@ mod input_tests {
     }    
 
     #[test]
+    fn test_rotate_contour_around_point() {
+        // Create a square contour centered at (0, 0)
+        let mut contour = Contour {
+            id: 1,
+            points: vec![
+                ContourPoint { frame_index: 1, point_index: 0, x: 1.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 1, x: 0.0, y: 1.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 2, x: -1.0, y: 0.0, z: 0.0, aortic: false },
+                ContourPoint { frame_index: 1, point_index: 3, x: 0.0, y: -1.0, z: 0.0, aortic: false },
+            ],
+            centroid: (0.0, 0.0, 0.0),
+            aortic_thickness: None,
+            pulmonary_thickness: None,
+        };
+        // Rotate 180 degrees (PI) around point (1, 1)
+        let mut new_contour = contour.clone();
+
+        new_contour.rotate_contour_around_point(PI, (1.0, 1.0));
+        let expected_points = vec![
+            ContourPoint { frame_index: 1, point_index: 0, x: 1.0, y: 2.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 1, x: 2.0, y: 1.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 2, x: 3.0, y: 2.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 3, x: 2.0, y: 3.0, z: 0.0, aortic: false },
+        ];
+
+        for (i, point) in new_contour.points.iter().enumerate() {
+            assert!((point.x - expected_points[i].x).abs() < 1e-6, "x mismatch at {}", i);
+            assert!((point.y - expected_points[i].y).abs() < 1e-6, "y mismatch at {}", i);
+        }
+        // Rotate 90 degrees (PI/2) around point (1, 1) to ensure direction
+        contour.rotate_contour_around_point(PI / 2.0, (1.0, 1.0));
+        let expected_points = vec![
+            ContourPoint { frame_index: 1, point_index: 0, x: 2.0, y: 1.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 1, x: 1.0, y: 0.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 2, x: 2.0, y: -1.0, z: 0.0, aortic: false },
+            ContourPoint { frame_index: 1, point_index: 3, x: 3.0, y: 0.0, z: 0.0, aortic: false },
+        ];
+
+        for (i, point) in contour.points.iter().enumerate() {
+            assert!((point.x - expected_points[i].x).abs() < 1e-6, "x mismatch at {}", i);
+            assert!((point.y - expected_points[i].y).abs() < 1e-6, "y mismatch at {}", i);
+        }
+    }
+
+    #[test]
     fn test_sort_contour_points() {
         let mut contour = Contour {
             id: 1,
