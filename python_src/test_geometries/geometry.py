@@ -201,6 +201,13 @@ class GeometryAssembler:
 
         # create base ellipse
         x, y = self.create_ellipse(area, elliptic_ratio)
+
+        is_valid, report = self.validate_ellipse(x, y, area, elliptic_ratio)
+        if not is_valid:
+            print("Validation failed:", report)
+        else:
+            print("Validation passed:", report)
+
         c.points_x = x.tolist()
         c.points_y = y.tolist()
         c.points_z = float(z)
@@ -236,6 +243,47 @@ class GeometryAssembler:
         b = elliptic_ratio * a
         t = np.linspace(0, 2 * np.pi, num_points)
         return a * np.cos(t) + 4.5, b * np.sin(t) + 4.5
+    
+    def validate_ellipse(self, x: np.ndarray, y: np.ndarray, target_area: float, target_ratio: float, tol: float = 1e-2):
+        """
+        Validates that the generated (x, y) ellipse has the desired area and ellipticity.
+
+        Args:
+            x (np.ndarray): x-coordinates of the ellipse
+            y (np.ndarray): y-coordinates of the ellipse
+            target_area (float): Expected area
+            target_ratio (float): Expected elliptic ratio (b/a)
+            tol (float): Tolerance for relative error
+
+        Returns:
+            bool: True if valid within tolerance, else False
+            dict: Calculated area, elliptic_ratio, and their errors
+        """
+        # Calculate centroid
+        x_cent = np.mean(x)
+        y_cent = np.mean(y)
+
+        # Center the ellipse
+        x_centered = x - x_cent
+        y_centered = y - y_cent
+
+        # Estimate semi-axes via standard deviation (ellipse is parametric)
+        # Correct the estimation by multiplying with sqrt(2)
+        a_est = np.std(x_centered) * np.sqrt(2)
+        b_est = np.std(y_centered) * np.sqrt(2)
+        area_est = np.pi * a_est * b_est
+        ratio_est = b_est / a_est
+
+        area_err = abs(area_est - target_area) / target_area
+        ratio_err = abs(ratio_est - target_ratio) / target_ratio
+
+        is_valid = area_err < tol and ratio_err < tol
+        return is_valid, {
+            "calculated_area": area_est,
+            "area_error": area_err,
+            "calculated_ratio": ratio_est,
+            "ratio_error": ratio_err
+        }
 
     def _translate_single(self, contour: Contour, translation: Tuple[float, float]):
         dx, dy = translation
@@ -263,7 +311,8 @@ class GeometryAssembler:
     def _plot_contour(self):
         if not self.geom_dia:
             return
-        contour = self.geom_dia[len(self.geom_dia) - 1]
+        # contour = self.geom_dia[len(self.geom_dia) - 1]
+        contour = self.geom_dia[0]
         plt.scatter(contour.points_x, contour.points_y)
         plt.scatter(self.reference_dia[1], self.reference_dia[2])
         plt.xlabel('X')

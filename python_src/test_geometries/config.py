@@ -1,3 +1,5 @@
+import os
+import json
 import numpy as np
 
 
@@ -363,3 +365,58 @@ TRANSLATION_DIA_STRESS[-1] = (0, 0)
 
 ROTATION_DIA_STRESS = [0, 350, 340, 330, 320, 310, 300, 290, 280, 270] + ROTATION_DIA_REST + [110, 100, 90, 80, 70, 60, 50]
 ROTATION_SYS_STRESS = [150, 160, 170, 180, 190, 200, 210, 220, 230, 240] + ROTATION_SYS_REST + [80, 70, 60, 50, 40, 30, 20]
+
+def export_test_manifest(mode: str):
+    """Exports test configuration data to JSON manifest"""
+    manifest = {
+        "rest": {
+            "dia": {
+                "num_contours": len(IDX_DIA_REST_SORTED),
+                "expected_indices": IDX_DIA_REST_SORTED,
+                "elliptic_ratios": ELLIP_DIA_REST,
+                "areas": AREA_DIA_REST,
+                "translations": TRANSLATION_DIA_REST,
+                "rotations": ROTATION_DIA_REST,
+                "aortic_thickness": AORTIC_DIA_REST,
+                "pulmonary_thickness": PULMONARY_DIA_REST
+            },
+            "sys": {
+                "num_contours": len(IDX_SYS_REST_SORTED),
+                "expected_indices": IDX_SYS_REST_SORTED,
+                "elliptic_ratios": ELLIP_SYS_REST,
+                "areas": AREA_SYS_REST,
+                "translations": TRANSLATION_SYS_REST,
+                "rotations": ROTATION_SYS_REST,
+                "aortic_thickness": AORTIC_SYS_REST,
+                "pulmonary_thickness": PULMONARY_SYS_REST
+            }
+        },
+        "stress": {
+            "dia": {
+                "num_contours": len(IDX_DIA_STRESS_SORTED),
+                "expected_indices": IDX_DIA_STRESS_SORTED,
+                "elliptic_ratios": ELLIP_DIA_STRESS,
+                "areas": AREA_DIA_STRESS,
+                "translations": TRANSLATION_DIA_STRESS,
+                "rotations": ROTATION_DIA_STRESS,
+                "aortic_thickness": AORTIC_DIA_STRESS,
+                "pulmonary_thickness": PULMONARY_DIA_STRESS
+            },
+            "sys": {
+                "num_contours": len(IDX_SYS_STRESS_SORTED),
+                "expected_indices": IDX_SYS_STRESS_SORTED,
+                "elliptic_ratios": ELLIP_SYS_STRESS,
+                "areas": AREA_SYS_STRESS,
+                "translations": TRANSLATION_SYS_STRESS,
+                "rotations": ROTATION_SYS_STRESS,
+                "aortic_thickness": AORTIC_SYS_STRESS,
+                "pulmonary_thickness": PULMONARY_SYS_STRESS
+            }
+        }
+    }
+    
+    output_dir = f"python_src/test_geometries/output/{mode}_csv_files"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    with open(f"{output_dir}/test_manifest.json", "w") as f:
+        json.dump(manifest[mode], f)

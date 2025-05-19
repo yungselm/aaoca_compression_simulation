@@ -114,7 +114,9 @@ impl Contour {
     /// Find the closest opposite points on a contour, where "opposite" means a point
     /// and the point halfway around the contour vector (e.g., 0 with n/2, 1 with n/2+1, etc.).
     /// If the number of points in the contour is odd, the function will ignore the last point.
+    /// Expects an ordered contour.
     pub fn find_closest_opposite(&self) -> ((&ContourPoint, &ContourPoint), f64) {
+        
         let n = self.points.len();
         // If odd, ignore the last point
         let effective_n = if n % 2 == 0 { n } else { n - 1 };
@@ -442,7 +444,7 @@ pub fn read_centerline_txt(path: &str) -> anyhow::Result<Vec<ContourPoint>> {
 }
 
 #[cfg(test)]
-mod geometry_tests {
+mod input_tests {
     use super::*;
 
     #[test]

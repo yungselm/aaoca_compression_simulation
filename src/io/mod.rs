@@ -54,44 +54,7 @@ impl Geometry {
         // order z_coords by f64 ascending
         z_coords.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
-        // reorder contours by records frame order, first filter only phase == 'D' if diastole true
-        // otherwise only phase == 'S'
-        let desired_phase = if diastole { "D" } else { "S" };
-        let filtered_records: Vec<_> = records
-            .into_iter()
-            .filter(|r| r.phase == desired_phase)
-            .collect();
-        
-        // Sort contours to match filtered record frame order
-        let desired_order: Vec<u32> = filtered_records.iter().map(|r| r.frame).collect();
-        contours.sort_by_key(|c| {
-            let id = c.id as u32;
-            desired_order
-            .iter()
-            .position(|&frame| frame == id)
-            .unwrap_or(usize::MAX)
-        });
-
-        // Update the z-coordinates of contours and their points using z_coords
-        for (i, contour) in contours.iter_mut().enumerate() {
-            // Replace the centroid's z-coordinate
-            contour.centroid.2 = z_coords[i];
-
-            // Replace the z-coordinate for every point in the contour
-            for point in contour.points.iter_mut() {
-            point.z = z_coords[i];
-            }
-        }
-
-        // Reassign indices for contours and update their points' frame_index accordingly.
-        for (new_idx, contour) in contours.iter_mut().enumerate() {
-            // Set the new contour id
-            contour.id = new_idx as u32;
-            // Update frame_index for each point in the contour
-            for point in contour.points.iter_mut() {
-                point.frame_index = new_idx as u32;
-            }
-        } // new order has now highest index for the ostium
+        Self::reorder_contours(&mut contours, &records, diastole, &z_coords);
 
         let mut catheter = Contour::create_catheter_contours(
             &contours
@@ -131,6 +94,63 @@ impl Geometry {
 
     fn load_results(records_path: &Path) -> anyhow::Result<Vec<Record>> {
         read_records(records_path)
+    }
+
+    /// Reorders contours by record frame order, updates z-coordinates and ids
+    fn reorder_contours(
+        contours: &mut Vec<Contour>,
+        records: &[Record],
+        diastole: bool,
+        z_coords: &[f64],
+    ) {
+        // reorder contours by records frame order, first filter only phase == 'D' if diastole true
+        // otherwise only phase == 'S'
+        let phase = if diastole { "D" } else { "S" };
+        let filtered: Vec<u32> = records
+            .iter()
+            .filter(|r| r.phase == phase)
+            .map(|r| r.frame)
+            .collect();
+
+        println!("Records id order: {:?}", &filtered);
+        let mut original_contour_ids = Vec::new();
+        for c in contours.iter() {
+            original_contour_ids.push(c.id)
+        }
+        println!("Original contour id order: {:?}", original_contour_ids);
+
+        // Sort contours to match filtered record frame order
+        contours.sort_by_key(|c| {
+            filtered
+                .iter()
+                .position(|&f| f == c.id)
+                .unwrap_or(usize::MAX)
+        });
+
+        let mut post_contour_ids = Vec::new();
+        for c in contours.iter() {
+            post_contour_ids.push(c.id)
+        }
+        println!("Post contour id order: {:?}", post_contour_ids);
+
+        // Update the z-coordinates of contours and their points using z_coords
+        for (i, contour) in contours.iter_mut().enumerate() {
+            // Replace the centroid's z-coordinate
+            contour.centroid.2 = z_coords[i];
+
+            // Replace the z-coordinate for every point in the contour
+            for pt in contour.points.iter_mut() {
+                pt.z = z_coords[i];
+            }
+        }
+
+        // Reassign indices for contours and update their points' frame_index accordingly.
+        for (new_id, contour) in contours.iter_mut().enumerate() {
+            contour.id = new_id as u32;
+            for pt in contour.points.iter_mut() {
+                pt.frame_index = new_id as u32;
+            }
+        } // new order has now highest index for the ostium
     }
 
     /// Smooths the x and y coordinates of the contours using a 3‐point moving average.
@@ -214,9 +234,8 @@ mod geometry_tests {
     use approx::assert_relative_eq;
     use serde_json::Value;
     use std::fs::File;
-    use std::path::Path;
 
-    const NUM_POINTS_CATHETER: usize = 20;  // From Python config
+    const NUM_POINTS_CATHETER: usize = 20;
 
     fn load_test_manifest(mode: &str) -> Value {
         let manifest_path = format!(
@@ -228,28 +247,56 @@ mod geometry_tests {
     }
 
     impl Contour {
-        // Add elliptic ratio calculation to Contour
         pub fn elliptic_ratio(&self) -> f64 {
-            let (_farthest_pair, max_dist) = self.find_farthest_points();
-            let (_closest_pair, min_dist) = self.find_closest_opposite();
-            
-            // Implementation based on your Python geometry calculations
-            (max_dist / 2.0) / (min_dist / 2.0)
+            let major_length = self.find_farthest_points().1;
+            let minor_length = self.find_closest_opposite().1;
+            // Ensure major is always larger than minor
+            if major_length < minor_length {
+                minor_length / major_length
+            } else {
+                major_length / minor_length
+            }
         }
 
-        // Add area calculation to Contour
         pub fn area(&self) -> f64 {
-            // Implement your area calculation logic here
-            // Based on Python's create_ellipse function:
-            // area = π * a * b where a and b are semi-axes
-            let (a, b) = self.semi_axes();
+            let major_length = self.find_farthest_points().1;
+            let minor_length = self.find_closest_opposite().1;
+            let a = major_length / 2.0;
+            let b = minor_length / 2.0;
             std::f64::consts::PI * a * b
         }
+    }
 
-        fn semi_axes(&self) -> (f64, f64) {
-            let (_farthest_pair, max_dist) = self.find_farthest_points();
-            let (_closest_pair, min_dist) = self.find_closest_opposite();
-            (max_dist / 2.0, min_dist / 2.0)
+    #[test]
+    fn test_reorder_matches_manifest_indices() {
+        let mode = "rest";
+        let manifest = load_test_manifest(mode);
+        let dia_expected: Vec<u32> = manifest["dia"]["expected_indices"]
+            .as_array().unwrap()
+            .iter()
+            .map(|v| v.as_u64().unwrap() as u32)
+            .collect();
+
+        // Load raw records and geometry
+        let input_dir = format!("python_src/test_geometries/output/{0}_csv_files", mode);
+        let geometry = Geometry::new(&input_dir, "test".into(), true).unwrap();
+        let records = Geometry::load_results(&Path::new(&input_dir).join("combined_sorted_manual.csv")).unwrap();
+        let filtered: Vec<u32> = records.into_iter()
+            .filter(|r| r.phase == "D")
+            .map(|r| r.frame)
+            .collect();
+
+        // Map reordered contours back to original frame indices
+        let actual_sequence: Vec<u32> = geometry.contours.iter()
+            .map(|c| filtered[c.id as usize])
+            .collect();
+
+        for (i, (got, want)) in actual_sequence.iter().zip(&dia_expected).enumerate() {
+            assert_eq!(
+                got, want,
+                "Mismatch at position {}: got frame {} but expected {}",
+                i, got, want
+            );
         }
     }
 
@@ -270,9 +317,9 @@ mod geometry_tests {
             dia_config["num_contours"].as_u64().unwrap() as usize,
             "Contour count mismatch"
         );
-
+        let n = geometry.contours.len() as u32;
         // Test frame indices ordering
-        let expected_indices: Vec<u32> = (0..=22).collect();
+        let expected_indices: Vec<u32> = (0..=(n - 1)).collect();
         
         let actual_indices: Vec<u32> = geometry.contours.iter()
             .map(|c| c.id)
@@ -295,11 +342,9 @@ mod geometry_tests {
         let manifest = load_test_manifest("rest");
         let dia_config = &manifest["dia"];
 
-        for (i, contour) in geometry.contours.iter().enumerate() {
+        for (i, contour) in geometry.contours.iter().enumerate().rev() {
             // Verify elliptic ratio
             let expected_ratio = dia_config["elliptic_ratios"][i].as_f64().unwrap();
-            println!("Expected ratio: {:?}", &expected_ratio);
-            println!("Actual ratio: {:?}", &contour.elliptic_ratio());
             assert_relative_eq!(
                 contour.elliptic_ratio(),
                 expected_ratio,

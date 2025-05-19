@@ -5,6 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from geometry import GeometryAssembler
 
+from config import export_test_manifest
 from writer import write_contours, write_reference_point, write_full_csv
 
 
@@ -68,6 +69,8 @@ def main():
         mode='stress'
     )
 
+    export_test_manifest('rest')
+    export_test_manifest('stress')
 
 if __name__ == "__main__":
     main()

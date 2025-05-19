@@ -56,7 +56,6 @@ def write_contours(geom: List[Contour],
     # collect all rows
     rows = []
     for c in geom:
-        print(c.idx)
         # ensure z is iterable
         if isinstance(c.points_z, (list, np.ndarray)):
             zs = c.points_z
@@ -76,7 +75,7 @@ def write_contours(geom: List[Contour],
               sep=sep,
               header=include_header,
               index=False,
-              float_format="%.12g")  # tweak float formatting if you like
+              float_format="%.8f")  # tweak float formatting if you like
 
     print(f"Wrote {len(df)} rows to {out_path!r}")
 
@@ -118,7 +117,7 @@ def write_reference_point(
         if include_header:
             f.write(sep.join(("idx", "x", "y", "z")) + "\n")
         # format floats with full precision but strip trailing zeros
-        line = sep.join(f"{v:.12g}" if isinstance(v, float) else str(v)
+        line = sep.join(f"{v:.8f}" if isinstance(v, float) else str(v)
                         for v in ref_pt)
         f.write(line + "\n")
 
@@ -242,13 +241,12 @@ def write_full_csv(
 
     # dump to DataFrame
     df = pd.DataFrame(rows)
-    df = df.sort_values(["phase", "frame"])
 
     df.to_csv(
         out_path,
         sep=sep,
         index=False,
         header=include_header,
-        float_format="%.12g"
+        float_format="%.8f"
     )
     print(f"Wrote {len(df)} rows to {out_path!r}")
