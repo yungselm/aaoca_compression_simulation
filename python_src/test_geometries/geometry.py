@@ -64,6 +64,13 @@ class Contour:
                  np.full_like(x, self.points_z))
         self.centroid = (x.mean(), y.mean(), z_arr.mean())
 
+def rotate_point(x: float, y: float, angle_rad: float, center: Tuple[float, float]) -> Tuple[float, float]:
+    cx, cy = center
+    x0, y0 = x - cx, y - cy
+    cos_a, sin_a = np.cos(angle_rad), np.sin(angle_rad)
+    xr = x0 * cos_a - y0 * sin_a
+    yr = x0 * sin_a + y0 * cos_a
+    return xr + cx, yr + cy
 
 class GeometryAssembler:
     def __init__(self, mode='rest'):
@@ -294,19 +301,15 @@ class GeometryAssembler:
             contour.centroid = (cx + dx, cy + dy, cz)
 
     def _rotate_single(self, contour: Contour, degree: float):
-        θ = np.deg2rad(degree)
-        c, s = np.cos(θ), np.sin(θ)
         if contour.centroid is None:
             contour.calculate_centroid()
         cx, cy, _ = contour.centroid
+        angle = np.deg2rad(degree)
 
-        x = np.array(contour.points_x) - cx
-        y = np.array(contour.points_y) - cy
-        x_rot = x * c - y * s
-        y_rot = x * s + y * c
-
-        contour.points_x = (x_rot + cx).tolist()
-        contour.points_y = (y_rot + cy).tolist()
+        # rotate each point via helper
+        pts = [rotate_point(x, y, angle, (cx, cy))
+            for x, y in zip(contour.points_x, contour.points_y)]
+        contour.points_x, contour.points_y = map(list, zip(*pts))
 
     def _plot_contour(self):
         if not self.geom_dia:

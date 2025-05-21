@@ -168,6 +168,7 @@ impl Contour {
         (best_pair, min_dist)
     }
 
+    /// Angle in radians
     pub fn rotate_contour(&mut self, angle: f64) {
         let center = (self.centroid.0, self.centroid.1);
         // Replace entire points instead of just coordinates
@@ -176,6 +177,7 @@ impl Contour {
             .collect();
     }
     
+    /// Angle in radians
     pub fn rotate_contour_around_point(&mut self, angle: f64, center: (f64, f64)) {
         // Replace entire points instead of just coordinates
         self.points = self.points.iter()

@@ -133,6 +133,46 @@ pub fn write_geometry_to_csv<P: AsRef<Path>>(
 }
 
 #[allow(dead_code)]
+pub fn write_contour_to_csv<P: AsRef<Path>>(
+    path: P,
+    contour: &Contour,
+) -> Result<(), Box<dyn Error>> {
+    let mut wtr = Writer::from_path(path)?;
+
+    // Write header
+    wtr.write_record(&[
+        "source",
+        "contour_id",
+        "point_index",
+        "frame_index",
+        "x", "y", "z",
+        "aortic",
+        "aortic_thickness",
+        "pulmonary_thickness",
+    ])?;
+
+    // Write all points of the single contour
+    for point in &contour.points {
+        let record = vec![
+            "contour".to_string(),
+            contour.id.to_string(),
+            point.point_index.to_string(),
+            point.frame_index.to_string(),
+            point.x.to_string(),
+            point.y.to_string(),
+            point.z.to_string(),
+            point.aortic.to_string(),
+            contour.aortic_thickness.map_or("None".to_string(), |v| v.to_string()),
+            contour.pulmonary_thickness.map_or("None".to_string(), |v| v.to_string()),
+        ];
+        wtr.write_record(&record)?;
+    }
+
+    wtr.flush()?;
+    Ok(())
+}
+
+#[allow(dead_code)]
 pub fn write_debug_obj_mesh(
     contours: &Vec<Contour>,
     filename: &str,
