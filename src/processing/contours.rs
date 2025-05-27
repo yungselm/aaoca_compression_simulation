@@ -174,6 +174,7 @@ fn rotate_reference_contour(
     if aortic_pt.x < non_aortic_pt.x {
         rotation_to_y += PI;
         rotated_ref.rotate_contour(PI);
+        rotated_ref.sort_contour_points();
         println!("Added additional 180° to the rotation");
     } else {
         println!("No additional rotation");
