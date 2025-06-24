@@ -59,7 +59,7 @@ pub fn create_displacement_texture(
     for (i, &disp) in displacements.iter().enumerate() {
         let x = (i % width as usize) as u32;
         // Flip Y-axis by subtracting from height - 1
-        let y = (height - 1) - (i / width as usize) as u32; // Changed line
+        let y = (height - 1) - (i / width as usize) as u32;
         let normalized = (disp / max_displacement).clamp(0.0, 1.0);
         let color = Rgb([
             (normalized * 255.0) as u8,

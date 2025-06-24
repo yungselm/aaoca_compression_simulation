@@ -51,3 +51,7 @@ Currently the scene setup creates 12 light sources on a sphere with a defined ra
 ## Aligning with a CCTA-derived centerline
 The deformed meshes can additionally be positioned and aligned on a CCTA-derived centerline. The rotation around the the centerline to match anatomical position currently has to be performed by manually specifying a rotation.
 ![CCTA centerline aligned mesh](media/systole_side.png)
+
+## Architecture
+Version 1.0.0 includes modules to align frames in a geomtry and save the final result as a group of .obj files.
+![Modules](media/modules.png)

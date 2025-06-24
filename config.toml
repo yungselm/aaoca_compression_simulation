@@ -10,7 +10,7 @@ aligned_stress_path = "output/aligned_stress"
 
 [processing]
 run_process_case = true
-run_centerline_alignment = true
+run_centerline_alignment = false
 
 [settings]
 interpolation_steps = 28 # this creates 30 meshes since diastole and systole already present

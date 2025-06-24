@@ -1,10 +1,11 @@
 use anyhow::{bail, anyhow};
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::Path;
 
 use crate::io::input::Contour;
 use crate::io::Geometry;
+use rayon::prelude::*;
+use std::path::PathBuf;
 
 pub fn write_obj_mesh(
     contours: &Vec<Contour>,
@@ -134,36 +135,48 @@ pub fn write_geometry_vec_to_obj(
     geometries: &[Geometry],
     uv_coords: &[Vec<(f64, f64)>],
 ) -> anyhow::Result<()> {
-    for (i, (geometry, uv_coords_mesh)) in geometries
-        .iter()
-        .zip(uv_coords.iter())
+    // Create owned versions for thread-safe capture
+    let case_name = case_name.to_owned();
+    let output_dir_path = PathBuf::from(output_dir);
+
+    geometries
+        .par_iter()
+        .zip(uv_coords.par_iter())
         .enumerate()
-    {
-        let obj_filename = format!(
-            "{}_{:03}_{}.obj",
-            geometry_type.as_str(),
-            i,
-            case_name
-        );
-        let mtl_filename = format!(
-            "{}_{:03}_{}.mtl",
-            geometry_type.as_str(),
-            i,
-            case_name
-        );
-        let obj_path = Path::new(output_dir).join(&obj_filename);
-        let obj_path_str = obj_path.to_str()
-            .ok_or_else(|| anyhow!("Invalid path for OBJ file"))?;
+        .try_for_each(|(i, (geometry, uv_coords_mesh))| {
+            // Clone necessary values for this thread
+            let case_name = case_name.clone();
+            let output_dir = output_dir_path.clone();
+            
+            let obj_filename = format!(
+                "{}_{:03}_{}.obj",
+                geometry_type.as_str(),
+                i,
+                case_name
+            );
+            let mtl_filename = format!(
+                "{}_{:03}_{}.mtl",
+                geometry_type.as_str(),
+                i,
+                case_name
+            );
+            
+            let obj_path = output_dir.join(&obj_filename);
+            let obj_path_str = obj_path
+                .to_str()
+                .ok_or_else(|| anyhow!("Invalid path for OBJ file"))?;
 
-        // Get the appropriate contour data (contours or catheter)
-        let contours = geometry_type.get_contours(geometry);
+            // Get contours
+            let contours = geometry_type.get_contours(geometry);
 
-        write_obj_mesh(
-            contours,
-            uv_coords_mesh,
-            obj_path_str,
-            &mtl_filename,
-        ).map_err(|e| anyhow!("Failed to write OBJ mesh: {}", e))?;
-    }
-    Ok(())
+            write_obj_mesh(
+                contours,
+                uv_coords_mesh,
+                obj_path_str,
+                &mtl_filename,
+            )
+            .map_err(|e| anyhow!("Failed to write OBJ mesh: {}", e))?;
+            
+            Ok(())
+        })
 }

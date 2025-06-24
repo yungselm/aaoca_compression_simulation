@@ -172,3 +172,19 @@ fn align_geometries(
     }
     geom
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use approx::assert_relative_eq;
+//     use std::f64::consts::PI;
+//     use crate::utils::test_utils::{generate_ellipse_points, new_dummy_contour}
+
+
+
+//     #[test]
+//     fn test_translate_z_to_match() {
+
+//     }
+
+// }
