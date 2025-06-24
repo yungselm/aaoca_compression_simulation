@@ -251,7 +251,7 @@ fn interpolate_thickness(
 }
 
 #[cfg(test)]
-mod tests {
+mod process_tests {
     use super::*;
     use crate::io::input::{Contour, ContourPoint};
     use approx::assert_relative_eq; // Add approx = "1.4" to Cargo.toml
@@ -368,10 +368,17 @@ mod tests {
 
         let result = interpolate_contours(&start, &end, 1).unwrap();
         
-        // Should use min length (1 contour)
+        // Verify frame counts
+        assert_eq!(result.len(), 3);
+        
+        // Start frame has original 1 contour
         assert_eq!(result[0].contours.len(), 1);
+        
+        // Interpolated frame uses min contours (1)
         assert_eq!(result[1].contours.len(), 1);
-        assert_eq!(result[2].contours.len(), 1);
+        
+        // End frame retains its original 2 contours
+        assert_eq!(result[2].contours.len(), 2);
     }
 
     #[test]
