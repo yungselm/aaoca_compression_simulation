@@ -269,3 +269,104 @@ pub fn find_best_rotation_all(
         .map(|(angle, _)| angle)
         .unwrap_or(0.0)
 }
+
+#[cfg(test)]
+mod geometry_pair_tests {
+    use super::*;
+
+    use approx::assert_relative_eq;
+    use std::f64::consts::PI;
+
+    use crate::io::input::{ContourPoint, Contour};
+    use crate::io::Geometry;
+    use crate::utils::test_utils::new_dummy_contour;
+
+    /// Helper: build a simple geometry with one contour of three points
+    fn simple_geometry(offset: (f64, f64), z_offset: f64, thickness: (Option<f64>, Option<f64>)) -> Geometry {
+        let p1 = ContourPoint { frame_index: 0, point_index: 0, x: 0.0 + offset.0, y: 0.0 + offset.1, z: 0.0 + z_offset, aortic: false };
+        let p2 = ContourPoint { frame_index: 0, point_index: 1, x: 1.0 + offset.0, y: 0.0 + offset.1, z: 1.0 + z_offset, aortic: false };
+        let p3 = ContourPoint { frame_index: 0, point_index: 2, x: 2.0 + offset.0, y: 0.0 + offset.1, z: 2.0 + z_offset, aortic: false };
+        let mut contour = Contour {
+            id: 0,
+            points: vec![p1.clone(), p2.clone(), p3.clone()],
+            centroid: ((0.0+1.0+2.0)/3.0 + offset.0, offset.1, (0.0+1.0+2.0)/3.0 + z_offset),
+            aortic_thickness: thickness.0,
+            pulmonary_thickness: thickness.1,
+        };
+        contour.sort_contour_points();
+        Geometry { contours: vec![contour], catheter: vec![], reference_point: p1, label: "test".into() }
+    }
+
+    #[test]
+    fn test_translate_contours_to_match() {
+        let mut gp = GeometryPair {
+            dia_geom: simple_geometry((5.0, 5.0), 0.0, (None, None)),
+            sys_geom: simple_geometry((0.0, 0.0), 0.0, (None, None)),
+        };
+        gp = gp.process_geometry_pair(1, 0.0);
+        let dia_centroid = gp.dia_geom.contours[0].centroid;
+        let sys_centroid = gp.sys_geom.contours[0].centroid;
+        assert_relative_eq!(dia_centroid.0, sys_centroid.0, epsilon = 1e-6);
+        assert_relative_eq!(dia_centroid.1, sys_centroid.1, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn test_apply_z_and_adjust_z_coordinates() {
+        let dia = simple_geometry((0.0,0.0), 0.0, (None, None));
+        let mut gp = GeometryPair { dia_geom: dia.clone(), sys_geom: simple_geometry((0.0,0.0), 2.0, (None, None)) };
+        gp = gp.process_geometry_pair(1, 0.0).adjust_z_coordinates();
+        for contour in gp.dia_geom.contours.iter() {
+            assert!(contour.centroid.2.is_finite());
+        }
+        for contour in gp.sys_geom.contours.iter() {
+            assert!(contour.centroid.2.is_finite());
+        }
+    }
+
+    #[test]
+    fn test_trim_geometries_same_length() {
+        let mut gp = GeometryPair { dia_geom: simple_geometry((0.0,0.0),0.0,(None,None)), sys_geom: simple_geometry((0.0,0.0),0.0,(None,None)) };
+        gp.dia_geom.contours.push(new_dummy_contour(1));
+        gp.sys_geom.contours.push(new_dummy_contour(1));
+        gp.dia_geom.contours.push(new_dummy_contour(2));
+        gp.dia_geom.catheter.push(new_dummy_contour(0));
+        gp.sys_geom.catheter.push(new_dummy_contour(0));
+        gp.sys_geom.catheter.push(new_dummy_contour(1));
+
+        let trimmed = gp.trim_geometries_same_length();
+        assert_eq!(trimmed.dia_geom.contours.len(), trimmed.sys_geom.contours.len());
+        assert_eq!(trimmed.dia_geom.catheter.len(), trimmed.sys_geom.catheter.len());
+    }
+
+    #[test]
+    fn test_thickness_adjustment() {
+        let dia = simple_geometry((0.0,0.0),0.0,(Some(2.0), None));
+        let sys = simple_geometry((0.0,0.0),0.0,(None, Some(4.0)));
+        let gp = GeometryPair { dia_geom: dia.clone(), sys_geom: sys.clone() }.thickness_adjustment();
+        let d = &gp.dia_geom.contours[0];
+        let s = &gp.sys_geom.contours[0];
+        assert_eq!(d.aortic_thickness.unwrap(), 2.0);
+        assert_eq!(s.aortic_thickness.unwrap(), 2.0);
+        assert_eq!(d.pulmonary_thickness.unwrap(), 4.0);
+        assert_eq!(s.pulmonary_thickness.unwrap(), 4.0);
+    }
+
+    #[test]
+    fn test_find_best_rotation_all_simple() {
+        let dia = simple_geometry((0.0, 0.0), 0.0, (None, None));
+        let p1 = ContourPoint { frame_index: 0, point_index: 0, x: 0.0, y: 0.0, z: 0.0, aortic: false };
+        let p2 = ContourPoint { frame_index: 0, point_index: 1, x: 1.0, y: 0.0, z: 1.0, aortic: false };
+        let p3 = ContourPoint { frame_index: 0, point_index: 2, x: 2.0, y: 0.0, z: 2.0, aortic: false };
+        let angle = -PI / 2.0;
+        let rotate = |p: ContourPoint| ContourPoint { x: p.x*angle.cos() - p.y*angle.sin(), y: p.x*angle.sin() + p.y*angle.cos(), ..p };
+        let mut sys_contour = Contour { id: 0, points: vec![rotate(p1), rotate(p2), rotate(p3)], centroid: (0.0,1.0,1.0), aortic_thickness: None, pulmonary_thickness: None };
+        sys_contour.sort_contour_points();
+        let sys = Geometry { contours: vec![sys_contour], catheter: vec![], reference_point: p1, label: "".into() };
+
+        let best = find_best_rotation_all(&dia, &sys, 4, PI);
+        let expected = PI / 2.0;
+        assert_relative_eq!(best.rem_euclid(2.0 * PI), expected, epsilon = 0.4);
+    }
+}
+
+

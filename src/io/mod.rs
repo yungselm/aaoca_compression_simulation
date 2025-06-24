@@ -4,6 +4,7 @@ pub mod output;
 
 use input::{read_records, Contour, ContourPoint, Record};
 use std::path::Path;
+use anyhow::{bail, Context};
 
 #[derive(Debug, Clone)]
 pub struct Geometry {
@@ -36,12 +37,23 @@ impl Geometry {
             )
         };
 
-        // Load core components
-        let mut contours = Self::load_contours(&contour_path, &records_path)?;
+        // Load core components, hard error checking since essential for program
+        let mut contours = Self::load_contours(&contour_path, &records_path)
+            .with_context(|| format!("Failed to load contours from {}", contour_path.display()))?;
+        if contours.is_empty() {
+            bail!("Contour file {} was empty — this data is required", contour_path.display());
+        }
         println!("Loaded contours");
-        let reference_point = Self::load_reference_point(&reference_path)?;
+
+        let reference_point = Self::load_reference_point(&reference_path)
+            .with_context(|| format!("Failed to load reference point from {}", reference_path.display()))?;
         println!("Loaded reference_point");
-        let records = Self::load_results(&records_path)?;
+
+        let records = Self::load_results(&records_path)
+            .with_context(|| format!("Failed to load records from {}", records_path.display()))?;
+        if records.is_empty() {
+            bail!("Results file {} was empty — this data is required", records_path.display());
+        }
         println!("Loaded results");
         
         // since reordeing the frames, destroys the z-coordinates of everyframe they need to be stored here
