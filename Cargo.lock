@@ -7,6 +7,7 @@ name = "aaoca_compression_simulation"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "approx",
  "crossbeam",
  "csv",
  "image",
@@ -14,6 +15,7 @@ dependencies = [
  "rand 0.9.1",
  "rayon",
  "serde",
+ "serde_json",
  "toml",
 ]
 
@@ -926,6 +928,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "serde_json"
+version = "1.0.140"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
+dependencies = [
+ "itoa",
+ "memchr",
+ "ryu",
+ "serde",
 ]
 
 [[package]]

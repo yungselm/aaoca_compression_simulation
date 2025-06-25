@@ -249,3 +249,187 @@ fn interpolate_thickness(
         _                  => None,
     }
 }
+
+#[cfg(test)]
+mod process_tests {
+    use super::*;
+    use crate::io::input::{Contour, ContourPoint};
+    use approx::assert_relative_eq; // Add approx = "1.4" to Cargo.toml
+
+    // Helper to create mock geometry
+    fn mock_geometry(label: &str) -> Geometry {
+        Geometry {
+            contours: vec![
+                Contour {
+                    id: 1,
+                    points: vec![
+                        ContourPoint {
+                            frame_index: 0,
+                            point_index: 0,
+                            x: 1.0,
+                            y: 2.0,
+                            z: 3.0,
+                            aortic: true,
+                        },
+                        ContourPoint {
+                            frame_index: 0,
+                            point_index: 1,
+                            x: 4.0,
+                            y: 5.0,
+                            z: 6.0,
+                            aortic: true,
+                        },
+                    ],
+                    centroid: (0.5, 1.0, 1.5),
+                    aortic_thickness: Some(1.0),
+                    pulmonary_thickness: Some(2.0),
+                },
+            ],
+            catheter: vec![Contour {
+                id: 2,
+                points: vec![ContourPoint {
+                    frame_index: 0,
+                    point_index: 0,
+                    x: 10.0,
+                    y: 20.0,
+                    z: 30.0,
+                    aortic: true,
+                }],
+                centroid: (5.0, 10.0, 15.0),
+                aortic_thickness: None,
+                pulmonary_thickness: None,
+            }],
+            reference_point: ContourPoint {
+                frame_index: 0,
+                point_index: 0,
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+                aortic: true,
+            },
+            label: label.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_interpolate_contours_basic() {
+        let start = mock_geometry("start");
+        let end = mock_geometry("end");
+        let steps = 2;
+
+        let result = interpolate_contours(&start, &end, steps).unwrap();
+
+        // Should have start + steps interpolated + end
+        assert_eq!(result.len(), steps + 2);
+
+        // Verify start is unchanged
+        assert_eq!(result[0].label, "start");
+        assert_eq!(result[0].contours[0].points[0].x, 1.0);
+
+        // Verify end is unchanged
+        assert_eq!(result[result.len()-1].label, "end");
+        assert_eq!(result[result.len()-1].contours[0].points[0].x, 1.0);
+
+        // Verify interpolation at midpoint
+        let mid = &result[1];
+        assert_eq!(mid.label, "start_inter_0");
+        
+        // Point interpolation
+        assert_relative_eq!(mid.contours[0].points[0].x, 1.0, epsilon = 1e-5);
+        assert_relative_eq!(mid.contours[0].points[1].y, 5.0, epsilon = 1e-5);
+        
+        // Centroid interpolation
+        assert_relative_eq!(mid.contours[0].centroid.0, 0.5, epsilon = 1e-5);
+        
+        // Catheter interpolation
+        assert_relative_eq!(mid.catheter[0].points[0].z, 30.0, epsilon = 1e-5);
+    }
+
+    #[test]
+    fn test_interpolate_contours_different_lengths() {
+        let start = mock_geometry("start");
+        let mut end = mock_geometry("end");
+        
+        // Add extra contour to end geometry
+        end.contours.push(Contour {
+            id: 3,
+            points: vec![ContourPoint {
+                frame_index: 0,
+                point_index: 0,
+                x: 100.0,
+                y: 200.0,
+                z: 300.0,
+                aortic: true,
+            }],
+            centroid: (50.0, 100.0, 150.0),
+            aortic_thickness: Some(10.0),
+            pulmonary_thickness: None,
+        });
+
+        let result = interpolate_contours(&start, &end, 1).unwrap();
+        
+        // Verify frame counts
+        assert_eq!(result.len(), 3);
+        
+        // Start frame has original 1 contour
+        assert_eq!(result[0].contours.len(), 1);
+        
+        // Interpolated frame uses min contours (1)
+        assert_eq!(result[1].contours.len(), 1);
+        
+        // End frame retains its original 2 contours
+        assert_eq!(result[2].contours.len(), 2);
+    }
+
+    #[test]
+    fn test_interpolate_thickness() {
+        // Both present
+        assert_eq!(
+            interpolate_thickness(&Some(1.0), &Some(3.0), 0.5),
+            Some(2.0)
+        );
+        
+        // Start missing
+        assert_eq!(
+            interpolate_thickness(&None, &Some(3.0), 0.5),
+            None
+        );
+        
+        // End missing
+        assert_eq!(
+            interpolate_thickness(&Some(1.0), &None, 0.5),
+            None
+        );
+        
+        // Both missing
+        assert_eq!(
+            interpolate_thickness(&None, &None, 0.5),
+            None
+        );
+    }
+
+    #[test]
+    fn test_interpolate_contours_zero_steps() {
+        let start = mock_geometry("start");
+        let end = mock_geometry("end");
+        
+        let result = interpolate_contours(&start, &end, 0).unwrap();
+        
+        // Should still have start and end frames
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].label, "start");
+        assert_eq!(result[1].label, "end");
+    }
+
+    #[test]
+    fn test_interpolate_contours_mismatched_ids() {
+        let start = mock_geometry("start");
+        let mut end = mock_geometry("end");
+        
+        // Create ID mismatch
+        end.contours[0].id = 99;
+        
+        let result = interpolate_contours(&start, &end, 1);
+        assert!(result.is_ok(), "Should handle ID mismatch gracefully");
+    }
+}

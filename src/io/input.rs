@@ -278,34 +278,62 @@ impl ContourPoint {
     }
 
     pub fn read_reference_point<P: AsRef<Path>>(path: P) -> Result<ContourPoint> {
-        // 1) Open the file, with context if it fails
+        // 1) Open the file, with context on failure
         let file = File::open(&path)
-            .with_context(|| format!("failed to open reference‐point file {:?}", path.as_ref()))?;
-        
+            .with_context(|| format!("failed to open reference-point file {:?}", path.as_ref()))?;
+
         // 2) Build a TSV reader
         let mut rdr = ReaderBuilder::new()
             .has_headers(false)
             .delimiter(b'\t')
             .from_reader(file);
-    
-        // 3) Iterate records
-        for result in rdr.records() {
-            // a) Propagate any I/O or parse errors
-            let record = result
-                .with_context(|| "error reading a CSV record from reference‐point file")?;
-            
-            // b) Deserialize into your struct; propagate errors
-            let point: ContourPoint = record
-                .deserialize(None)
-                .with_context(|| "failed to deserialize CSV record into ContourPoint")?;
-            
-            // c) Return on first successful parse
-            return Ok(point);
-        }
-    
-        // 4) If we fell through, no record was parsed
-        Err(anyhow!("No valid reference point found in file {:?}", path.as_ref()))
+
+        // 3) Grab the first record (if any)…
+        let first = rdr
+            .deserialize()
+            .next()
+            // if there was literally no row at all:
+            .ok_or_else(|| {
+                anyhow!(
+                    "reference-point file {:?} was empty — this data is required",
+                    path.as_ref()
+                )
+            })?;
+
+        // 4) And now propagate any parse / I/O error with its own context:
+        let point: ContourPoint = first
+            .with_context(|| "failed to deserialize first reference-point record")?;
+        Ok(point)
     }
+
+    // pub fn read_reference_point<P: AsRef<Path>>(path: P) -> Result<ContourPoint> {
+    //     // 1) Open the file, with context if it fails
+    //     let file = File::open(&path)
+    //         .with_context(|| format!("failed to open reference-point file {:?}", path.as_ref()))?;
+        
+    //     // 2) Build a TSV reader
+    //     let mut rdr = ReaderBuilder::new()
+    //         .has_headers(false)
+    //         .delimiter(b'\t')
+    //         .from_reader(file);
+    
+    //     // 3) Iterate records
+    //     for result in rdr.records() {
+    //         // a) Propagate any I/O or parse errors
+    //         let record = result
+    //             .with_context(|| "error reading a CSV record from reference-point file")?;
+            
+    //         // b) Deserialize into struct; propagate errors
+    //         let point: ContourPoint = record
+    //             .deserialize(None)
+    //             .with_context(|| "failed to deserialize CSV record into ContourPoint")?;
+            
+    //         return Ok(point);
+    //     }
+    
+    //     // 4) If we fell through, no record was parsed
+    //     Err(anyhow!("No valid reference point found in file {:?}", path.as_ref()))
+    // }
 
     pub fn create_catheter_points(points: &Vec<ContourPoint>) -> Vec<ContourPoint> {
         // Map to store unique frame indices and one associated z coordinate per frame.

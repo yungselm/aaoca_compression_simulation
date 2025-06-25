@@ -26,24 +26,3 @@ z_coord_lower = 1749.9655
 steps_best_rotation = 300
 # range_rotation_rad = 1.05 # +/- 60 degrees
 range_rotation_rad = 1.57 # +/- 90 degrees
-
-# [general]
-# rest_input_path = "PDJ1W2CV_csv_files/rest_csv_files"
-# stress_input_path = "PDJ1W2CV_csv_files/stress_csv_files"
-# rest_output_path = "PDJ1W2CV_csv_files/output/rest"
-# stress_output_path = "PDJ1W2CV_csv_files/output/stress"
-# diastole_comparison_path = "PDJ1W2CV_csv_files/output/diastole_comparison"
-# systole_comparison_path = "PDJ1W2CV_csv_files/output/systole_comparison"
-# aligned_rest_path = "PDJ1W2CV_csv_files/output/aligned_rest"
-# aligned_stress_path = "PDJ1W2CV_csv_files/output/aligned_stress"
-
-# [processing]
-# run_process_case = false
-# run_phase_comparison = false
-# run_centerline_alignment = true
-
-# [settings]
-# interpolation_steps = 30
-# x_coord_ref = 5.6878
-# y_coord_ref = -140.2842
-# z_coord_ref = 220.1459
